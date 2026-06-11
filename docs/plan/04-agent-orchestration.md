@@ -34,7 +34,7 @@ src/app/api/projects/[projectId]/agent/stop/route.ts
 - Create: `src/server/agent/can-finish.ts`
 - Create: `src/server/agent/can-finish.test.ts`
 
-- [ ] **Step 1: 写常量**
+- [x] **Step 1: 写常量**
 
 ```ts
 export const MAX_AGENT_STEPS = 12
@@ -42,7 +42,7 @@ export const MAX_BUILD_ATTEMPTS = 2
 export const MAX_REPAIR_ATTEMPTS = 1
 ```
 
-- [ ] **Step 2: 写完成条件测试**
+- [x] **Step 2: 写完成条件测试**
 
 ```ts
 import { describe, expect, it } from "vitest"
@@ -69,7 +69,7 @@ describe("canFinish", () => {
 })
 ```
 
-- [ ] **Step 3: 实现完成条件**
+- [x] **Step 3: 实现完成条件**
 
 ```ts
 import type { AgentState } from "@/server/contracts"
@@ -87,7 +87,12 @@ export function canFinish(state: Pick<AgentState, "strategy" | "blueprint" | "bu
 }
 ```
 
-- [ ] **Step 4: 运行测试**
+Audit hardening:
+
+- `canFinish` 使用 Strategy、Blueprint、Build 和 Review 的 Zod Schema 做最终校验。
+- Build 必须通过 contract 层 `/App.tsx` 和文件路径约束。
+
+- [x] **Step 4: 运行测试**
 
 Run: `npm run test -- src/server/agent/can-finish.test.ts`
 
@@ -99,7 +104,7 @@ Expected: 2 tests pass。
 - Create: `src/server/agent/state-factory.ts`
 - Create: `src/server/agent/state-factory.test.ts`
 
-- [ ] **Step 1: 写测试**
+- [x] **Step 1: 写测试**
 
 ```ts
 import { describe, expect, it } from "vitest"
@@ -117,7 +122,7 @@ describe("createInitialAgentState", () => {
 })
 ```
 
-- [ ] **Step 2: 实现 state factory**
+- [x] **Step 2: 实现 state factory**
 
 ```ts
 import type { AgentState } from "@/server/contracts"
@@ -145,7 +150,7 @@ export function createInitialAgentState(projectId: string, originalProblem: stri
 }
 ```
 
-- [ ] **Step 3: 运行测试**
+- [x] **Step 3: 运行测试**
 
 Run: `npm run test -- src/server/agent/state-factory.test.ts`
 
@@ -158,7 +163,7 @@ Expected: 1 test passes。
 - Create: `src/server/mastra/agents/supervisor-agent.ts`
 - Create: `src/server/mastra/index.ts`
 
-- [ ] **Step 1: 写 Supervisor instructions**
+- [x] **Step 1: 写 Supervisor instructions**
 
 ```ts
 export const supervisorInstructions = `
@@ -176,7 +181,7 @@ export const supervisorInstructions = `
 `
 ```
 
-- [ ] **Step 2: 创建 Supervisor Agent**
+- [x] **Step 2: 创建 Supervisor Agent**
 
 ```ts
 import { Agent } from "@mastra/core/agent"
@@ -190,7 +195,7 @@ export const supervisorAgent = new Agent({
 })
 ```
 
-- [ ] **Step 3: 注册 Mastra 实例**
+- [x] **Step 3: 注册 Mastra 实例**
 
 ```ts
 import { Mastra } from "@mastra/core"
@@ -203,7 +208,7 @@ export const mastra = new Mastra({
 })
 ```
 
-- [ ] **Step 4: 运行类型检查**
+- [x] **Step 4: 运行类型检查**
 
 Run: `npm run typecheck`
 
@@ -214,7 +219,7 @@ Expected: exit code `0`。
 **Files:**
 - Create: `src/server/agent/tool-registry.ts`
 
-- [ ] **Step 1: 写 Runtime 工具接口**
+- [x] **Step 1: 写 Runtime 工具接口**
 
 ```ts
 import type { AgentState, ToolName } from "@/server/contracts"
@@ -246,14 +251,14 @@ export function createToolRegistry(tools: AgentTool[]) {
 }
 ```
 
-- [ ] **Step 2: 说明职责边界**
+- [x] **Step 2: 说明职责边界**
 
 ```ts
 // Mastra tools 负责输入输出 Schema、工具描述和工具执行。
 // Runtime registry 负责按 VentureFlow 的工具白名单查找工具，并把结果转换成 AgentState patch。
 ```
 
-- [ ] **Step 3: 运行类型检查**
+- [x] **Step 3: 运行类型检查**
 
 Run: `npm run typecheck`
 
@@ -265,7 +270,7 @@ Expected: exit code `0`。
 - Create: `src/server/agent/supervisor.ts`
 - Create: `src/server/agent/supervisor.test.ts`
 
-- [ ] **Step 1: 写 loop 测试**
+- [x] **Step 1: 写 loop 测试**
 
 ```ts
 import { describe, expect, it } from "vitest"
@@ -295,7 +300,7 @@ describe("supervisor", () => {
 })
 ```
 
-- [ ] **Step 2: 实现 Supervisor**
+- [x] **Step 2: 实现 Supervisor**
 
 ```ts
 import type { AgentAction, AgentState } from "@/server/contracts"
@@ -351,7 +356,7 @@ export async function runSupervisorWithDecisionProvider(initialState: AgentState
 }
 ```
 
-- [ ] **Step 3: 运行测试**
+- [x] **Step 3: 运行测试**
 
 Run: `npm run test -- src/server/agent/supervisor.test.ts`
 
@@ -364,7 +369,7 @@ Expected: 1 test passes。
 - Create: `src/app/api/projects/[projectId]/agent/state/route.ts`
 - Create: `src/app/api/projects/[projectId]/agent/stop/route.ts`
 
-- [ ] **Step 1: 写 run route**
+- [x] **Step 1: 写 run route**
 
 ```ts
 import { NextResponse } from "next/server"
@@ -382,7 +387,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ projectId
 }
 ```
 
-- [ ] **Step 2: 写 state route**
+- [x] **Step 2: 写 state route**
 
 ```ts
 import { NextResponse } from "next/server"
@@ -400,7 +405,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ projectId:
 }
 ```
 
-- [ ] **Step 3: 写 stop route**
+- [x] **Step 3: 写 stop route**
 
 ```ts
 import { NextResponse } from "next/server"
@@ -412,13 +417,13 @@ export async function POST(_: Request, { params }: { params: Promise<{ projectId
 }
 ```
 
-- [ ] **Step 4: 运行验证**
+- [x] **Step 4: 运行验证**
 
 Run: `npm run typecheck && npm run test -- src/server/agent`
 
 Expected: typecheck 通过，agent 测试通过。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/server/agent src/server/mastra src/app/api/projects

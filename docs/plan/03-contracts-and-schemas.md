@@ -18,6 +18,7 @@ src/server/contracts/blueprint.ts
 src/server/contracts/build.ts
 src/server/contracts/review.ts
 src/server/contracts/agent.ts
+src/server/contracts/json.ts
 src/server/contracts/optimization.ts
 src/server/contracts/index.ts
 src/server/contracts/contracts.test.ts
@@ -28,7 +29,7 @@ src/server/contracts/contracts.test.ts
 **Files:**
 - Create: `src/server/contracts/strategy.ts`
 
-- [ ] **Step 1: 写 Strategy Schema**
+- [x] **Step 1: 写 Strategy Schema**
 
 ```ts
 import { z } from "zod"
@@ -59,7 +60,7 @@ export const strategyOutputSchema = z.object({
 export type StrategyOutput = z.infer<typeof strategyOutputSchema>
 ```
 
-- [ ] **Step 2: 运行类型检查**
+- [x] **Step 2: 运行类型检查**
 
 Run: `npm run typecheck`
 
@@ -70,10 +71,11 @@ Expected: exit code `0`。
 **Files:**
 - Create: `src/server/contracts/blueprint.ts`
 
-- [ ] **Step 1: 写 Blueprint Schema**
+- [x] **Step 1: 写 Blueprint Schema**
 
 ```ts
 import { z } from "zod"
+import { jsonValueSchema } from "./json"
 import { appPatternSchema } from "./strategy"
 
 export const fieldSchema = z.object({
@@ -129,13 +131,13 @@ export const productBlueprintSchema = z.object({
   pages: z.array(pageSchema).min(2).max(5),
   workflows: z.array(workflowSchema).min(1).max(5),
   decisions: z.array(productDecisionSchema).min(1).max(8),
-  seedData: z.record(z.array(z.record(z.unknown()))),
+  seedData: z.record(z.string(), z.array(z.record(z.string(), jsonValueSchema))),
 })
 
 export type ProductBlueprint = z.infer<typeof productBlueprintSchema>
 ```
 
-- [ ] **Step 2: 运行类型检查**
+- [x] **Step 2: 运行类型检查**
 
 Run: `npm run typecheck`
 
@@ -147,10 +149,11 @@ Expected: exit code `0`。
 - Create: `src/server/contracts/build.ts`
 - Create: `src/server/contracts/review.ts`
 - Create: `src/server/contracts/agent.ts`
+- Create: `src/server/contracts/json.ts`
 - Create: `src/server/contracts/optimization.ts`
 - Create: `src/server/contracts/index.ts`
 
-- [ ] **Step 1: 写 Build Schema**
+- [x] **Step 1: 写 Build Schema**
 
 ```ts
 import { z } from "zod"
@@ -169,7 +172,7 @@ export type GeneratedFile = z.infer<typeof generatedFileSchema>
 export type BuildOutput = z.infer<typeof buildOutputSchema>
 ```
 
-- [ ] **Step 2: 写 Review Schema**
+- [x] **Step 2: 写 Review Schema**
 
 ```ts
 import { z } from "zod"
@@ -189,12 +192,13 @@ export const reviewResultSchema = z.object({
 export type ReviewResult = z.infer<typeof reviewResultSchema>
 ```
 
-- [ ] **Step 3: 写 Agent Schema**
+- [x] **Step 3: 写 Agent Schema**
 
 ```ts
 import { z } from "zod"
 import { buildOutputSchema } from "./build"
 import { productBlueprintSchema } from "./blueprint"
+import { jsonObjectSchema } from "./json"
 import { reviewResultSchema } from "./review"
 import { strategyOutputSchema } from "./strategy"
 
@@ -216,7 +220,7 @@ export const agentActionSchema = z.discriminatedUnion("type", [
     type: z.literal("tool"),
     reasoningSummary: z.string().min(1),
     toolName: toolNameSchema,
-    arguments: z.record(z.unknown()),
+    arguments: jsonObjectSchema,
   }),
   z.object({
     type: z.literal("finish"),
@@ -257,7 +261,7 @@ export type AgentAction = z.infer<typeof agentActionSchema>
 export type AgentState = z.infer<typeof agentStateSchema>
 ```
 
-- [ ] **Step 4: 写 Optimization Schema**
+- [x] **Step 4: 写 Optimization Schema**
 
 ```ts
 import { z } from "zod"
@@ -285,12 +289,13 @@ export type OptimizationRecommendation = z.infer<typeof optimizationRecommendati
 export type OptimizationOutput = z.infer<typeof optimizationOutputSchema>
 ```
 
-- [ ] **Step 5: 导出 contract**
+- [x] **Step 5: 导出 contract**
 
 ```ts
 export * from "./agent"
 export * from "./blueprint"
 export * from "./build"
+export * from "./json"
 export * from "./optimization"
 export * from "./review"
 export * from "./strategy"
@@ -301,7 +306,7 @@ export * from "./strategy"
 **Files:**
 - Create: `src/server/contracts/contracts.test.ts`
 
-- [ ] **Step 1: 写测试**
+- [x] **Step 1: 写测试**
 
 ```ts
 import { describe, expect, it } from "vitest"
@@ -356,16 +361,15 @@ describe("contracts", () => {
 })
 ```
 
-- [ ] **Step 2: 运行测试**
+- [x] **Step 2: 运行测试**
 
 Run: `npm run test -- src/server/contracts/contracts.test.ts`
 
-Expected: 3 tests pass。
+Expected: 4 tests pass。
 
 - [ ] **Step 3: 提交**
 
 ```bash
-git add src/server/contracts
+git add docs/plan/03-contracts-and-schemas.md src/server/contracts
 git commit -m "feat: add ai output contracts"
 ```
-

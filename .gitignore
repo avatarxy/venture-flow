@@ -10,6 +10,12 @@ node_modules/
 .env.*.local
 !.env.example
 
+# agent & skills
+
+.agent
+.claude
+.workbuddy
+
 # Next.js
 .next/
 out/

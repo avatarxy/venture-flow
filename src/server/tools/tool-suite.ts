@@ -1,10 +1,12 @@
 import { createToolRegistry } from "@/server/agent/tool-registry"
+import type { JsonValue } from "@/server/contracts/json"
+import { productBlueprintSchema, strategyOutputSchema, buildOutputSchema, reviewResultSchema } from "@/server/contracts"
 import { analyzeProblem, analyzeProblemTool } from "./analyze-problem"
 import { createBlueprint, createBlueprintTool } from "./create-blueprint"
 import { generateApplication, generateApplicationTool } from "./generate-application"
-import { inspectBuild, inspectBuildTool } from "./inspect-build"
+import { buildInspectionInputSchema, inspectBuild, inspectBuildTool } from "./inspect-build"
 import { inspectCapabilities, inspectCapabilitiesTool } from "./inspect-capabilities"
-import { optimizeProduct, optimizeProductTool } from "./optimize-product"
+import { optimizeProduct, optimizeProductInputSchema, optimizeProductTool } from "./optimize-product"
 import { repairApplication, repairApplicationTool } from "./repair-application"
 import { validateBlueprintCapability, validateBlueprintTool } from "./validate-blueprint"
 
@@ -17,6 +19,18 @@ export const mastraTools = {
   inspectBuildTool,
   repairApplicationTool,
   optimizeProductTool,
+}
+
+/**
+ * 从 args 或 state 中安全提取并校验 Blueprint
+ * 替代之前的 `as never` 断言，通过 Zod 运行时校验确保类型安全
+ */
+function resolveBlueprint(args: Record<string, unknown>, state: { blueprint?: unknown }) {
+  const raw = state.blueprint ?? args.blueprint
+  if (!raw) {
+    throw new Error("无法解析 Blueprint：state 和 args 中均未提供")
+  }
+  return productBlueprintSchema.parse(raw)
 }
 
 export function createVentureFlowToolSuite() {
@@ -34,20 +48,24 @@ export function createVentureFlowToolSuite() {
     {
       name: "inspect_capabilities",
       async execute() {
-        inspectCapabilities()
+        const result = inspectCapabilities()
         return {
           summary: "VentureFlow capabilities inspected",
-          statePatch: {},
+          statePatch: { capabilities: result },
         }
       },
     },
     {
       name: "create_blueprint",
       async execute(args, state) {
+        const strategy = state.strategy ?? (args.strategy ? strategyOutputSchema.parse(args.strategy) : undefined)
+        if (!strategy) {
+          throw new Error("无法解析 Strategy：state 和 args 中均未提供")
+        }
         const result = await createBlueprint({
           originalProblem: String(args.originalProblem ?? state.originalProblem),
-          strategy: state.strategy ?? args.strategy,
-        } as never)
+          strategy,
+        })
         return {
           summary: "Blueprint generated",
           statePatch: { blueprint: result },
@@ -72,7 +90,8 @@ export function createVentureFlowToolSuite() {
     {
       name: "generate_application",
       async execute(args, state) {
-        const result = await generateApplication((state.blueprint ?? args.blueprint) as never)
+        const blueprint = resolveBlueprint(args, state)
+        const result = await generateApplication(blueprint)
         return {
           summary: "Application generated",
           statePatch: { build: result },
@@ -82,7 +101,12 @@ export function createVentureFlowToolSuite() {
     {
       name: "inspect_build",
       async execute(args, state) {
-        const result = inspectBuild((args.build ?? state.build) as never)
+        const rawBuild = args.build ?? state.build
+        if (!rawBuild) {
+          throw new Error("无法解析 Build：state 和 args 中均未提供")
+        }
+        // inspectBuild 内部会通过 buildInspectionInputSchema.parse() 校验
+        const result = inspectBuild(rawBuild as Parameters<typeof inspectBuild>[0])
         return {
           summary: result.passed ? "Build inspection passed" : "Build inspection failed",
           statePatch: { review: result },
@@ -92,11 +116,20 @@ export function createVentureFlowToolSuite() {
     {
       name: "repair_application",
       async execute(args, state) {
+        const blueprint = resolveBlueprint(args, state)
+        const rawBuild = state.build ?? args.build
+        const rawReview = state.review ?? args.review
+        if (!rawBuild) {
+          throw new Error("无法解析 Build：state 和 args 中均未提供")
+        }
+        if (!rawReview) {
+          throw new Error("无法解析 Review：state 和 args 中均未提供")
+        }
         const result = await repairApplication({
-          blueprint: state.blueprint ?? args.blueprint,
-          build: state.build ?? args.build,
-          review: state.review ?? args.review,
-        } as never)
+          blueprint,
+          build: buildOutputSchema.parse(rawBuild),
+          review: reviewResultSchema.parse(rawReview),
+        })
         return {
           summary: "Application repaired",
           statePatch: { build: result },
@@ -106,13 +139,21 @@ export function createVentureFlowToolSuite() {
     {
       name: "optimize_product",
       async execute(args, state) {
-        await optimizeProduct({
-          blueprint: (state.blueprint ?? args.blueprint) as never,
-          usageEvents: (args.usageEvents ?? []) as never,
+        const blueprint = resolveBlueprint(args, state)
+        // usageEvents 从 JsonValue[] 中安全转换为 Record<string, JsonValue>[]
+        const rawUsageEvents = Array.isArray(args.usageEvents) ? args.usageEvents : []
+        const usageEvents = rawUsageEvents.map((event) => {
+          if (event && typeof event === "object" && !Array.isArray(event)) {
+            return event as Record<string, JsonValue>
+          }
+          throw new Error("usageEvents 中每项必须是对象")
         })
+        const result = await optimizeProduct(
+          optimizeProductInputSchema.parse({ blueprint, usageEvents }),
+        )
         return {
           summary: "Product optimization generated",
-          statePatch: {},
+          statePatch: { optimization: result },
         }
       },
     },

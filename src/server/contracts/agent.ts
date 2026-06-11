@@ -2,8 +2,10 @@ import { z } from "zod"
 import { buildOutputSchema } from "./build"
 import { productBlueprintSchema } from "./blueprint"
 import { jsonObjectSchema } from "./json"
+import { optimizationOutputSchema } from "./optimization"
 import { reviewResultSchema } from "./review"
 import { strategyOutputSchema } from "./strategy"
+import { inspectCapabilitiesOutputSchema } from "../tools/inspect-capabilities"
 
 export const toolNameSchema = z.enum([
   "analyze_problem",
@@ -59,6 +61,8 @@ export const agentStateSchema = z.object({
   blueprint: productBlueprintSchema.optional(),
   build: buildOutputSchema.optional(),
   review: reviewResultSchema.optional(),
+  optimization: optimizationOutputSchema.optional(),
+  capabilities: inspectCapabilitiesOutputSchema.optional(),
   toolCalls: z.array(toolCallRecordSchema),
   buildAttempts: z.number().int().nonnegative(),
   repairAttempts: z.number().int().nonnegative(),

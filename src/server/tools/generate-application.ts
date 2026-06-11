@@ -6,11 +6,19 @@ import { generateStructuredObject } from "@/server/ai/generate-structured"
 import { createAppBuilderPrompt } from "@/server/generation/prompts/app-builder-prompt"
 
 export async function generateApplication(blueprint: ProductBlueprint) {
-  return generateStructuredObject({
+  const build = await generateStructuredObject({
     schema: buildOutputSchema,
     system: createAppBuilderPrompt(),
     prompt: JSON.stringify(blueprint, null, 2),
   })
+
+  // 业务守卫：即使 Schema 层 superRefine 已校验，此处显式断言 /App.tsx 存在性
+  // 确保后续修改 Schema 不会意外移除此关键约束
+  if (!build.files.some((file) => file.path === "/App.tsx")) {
+    throw new Error("生成结果缺少 /App.tsx 入口文件")
+  }
+
+  return build
 }
 
 export const generateApplicationTool = createTool({

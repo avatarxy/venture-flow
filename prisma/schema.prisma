@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStatus {
+  DRAFT
+  RUNNING
+  NEEDS_REVIEW
+  COMPLETED
+  FAILED
+}
+
+enum GenerationType {
+  STRATEGY
+  BLUEPRINT
+  BUILD
+  REVIEW
+  OPTIMIZATION
+  IMPROVEMENT
+}
+
+enum GenerationStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum PublishStatus {
+  DRAFT
+  LIVE
+  FAILED
+}
+
+model Project {
+  id               String             @id @default(cuid())
+  name             String
+  originalProblem  String
+  status           ProjectStatus      @default(DRAFT)
+  strategy         Json?
+  blueprint        Json?
+  currentVersionId String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  generations      Generation[]
+  versions         GeneratedVersion[]
+  usageEvents      UsageEvent[]
+  agentState       AgentState?
+}
+
+model Generation {
+  id           String           @id @default(cuid())
+  projectId    String
+  type         GenerationType
+  input        Json
+  output       Json?
+  status       GenerationStatus
+  errorMessage String?
+  createdAt    DateTime         @default(now())
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+}
+
+model GeneratedVersion {
+  id                String        @id @default(cuid())
+  projectId         String
+  version           Int
+  files             Json
+  blueprintSnapshot Json
+  changeSummary     String
+  publishStatus     PublishStatus @default(DRAFT)
+  createdAt         DateTime      @default(now())
+  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  usageEvents       UsageEvent[]
+
+  @@unique([projectId, version])
+  @@index([projectId, createdAt])
+}
+
+model AgentState {
+  projectId      String   @id
+  status         String
+  currentPlan    Json
+  currentStep    Int      @default(0)
+  toolCalls      Json
+  buildAttempts  Int      @default(0)
+  repairAttempts Int      @default(0)
+  totalTokens    Int      @default(0)
+  updatedAt      DateTime @updatedAt
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model UsageEvent {
+  id         String           @id @default(cuid())
+  projectId  String
+  versionId  String
+  eventName  String
+  entityName String?
+  metadata   Json?
+  createdAt  DateTime         @default(now())
+  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version    GeneratedVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([versionId, createdAt])
+  @@index([eventName, createdAt])
+}

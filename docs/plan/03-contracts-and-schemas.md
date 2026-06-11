@@ -137,6 +137,12 @@ export const productBlueprintSchema = z.object({
 export type ProductBlueprint = z.infer<typeof productBlueprintSchema>
 ```
 
+Audit hardening:
+
+- `entities[].name`、同一实体内 `fields[].name`、`pages[].id` 和 `pages[].route` 必须唯一。
+- `pages[].components[].entityName` 必须引用已定义实体。
+- `seedData` 的 key 必须引用已定义实体。
+
 - [x] **Step 2: 运行类型检查**
 
 Run: `npm run typecheck`
@@ -158,8 +164,12 @@ Expected: exit code `0`。
 ```ts
 import { z } from "zod"
 
+export const appEntrypointPath = "/App.tsx"
+
+export const generatedFilePathSchema = z.string().regex(/^\/(?:[A-Za-z0-9][A-Za-z0-9._-]*\/)*[A-Za-z0-9][A-Za-z0-9._-]*$/)
+
 export const generatedFileSchema = z.object({
-  path: z.string().startsWith("/"),
+  path: generatedFilePathSchema,
   content: z.string().min(1),
 })
 
@@ -167,6 +177,10 @@ export const buildOutputSchema = z.object({
   summary: z.string().min(1),
   files: z.array(generatedFileSchema).min(1),
 })
+
+// Audit hardening:
+// - `files` 必须包含唯一的 `/App.tsx` 入口文件。
+// - `path` 禁止相对路径、空段、`..` 和反斜杠。
 
 export type GeneratedFile = z.infer<typeof generatedFileSchema>
 export type BuildOutput = z.infer<typeof buildOutputSchema>
@@ -188,6 +202,10 @@ export const reviewResultSchema = z.object({
   issues: z.array(reviewIssueSchema),
   recommendedFix: z.string().optional(),
 })
+
+// Audit hardening:
+// - `passed: true` 时不能包含 issue。
+// - `passed: false` 时必须包含至少一个 issue。
 
 export type ReviewResult = z.infer<typeof reviewResultSchema>
 ```
@@ -365,7 +383,7 @@ describe("contracts", () => {
 
 Run: `npm run test -- src/server/contracts/contracts.test.ts`
 
-Expected: 4 tests pass。
+Expected: 8 tests pass。
 
 - [ ] **Step 3: 提交**
 

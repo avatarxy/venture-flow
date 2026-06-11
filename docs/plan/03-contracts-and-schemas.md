@@ -229,6 +229,7 @@ export const toolNameSchema = z.enum([
   "inspect_build",
   "run_preview",
   "repair_application",
+  "optimize_product",
   "save_project",
   "finish_task",
 ])

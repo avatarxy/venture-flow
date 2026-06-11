@@ -36,7 +36,7 @@ src/server/generation/prompts/app-builder-prompt.ts
 - Create: `src/server/ai/json-output.ts`
 - Create: `src/server/ai/generate-structured.ts`
 
-- [ ] **Step 1: 写模型入口**
+- [x] **Step 1: 写模型入口**
 
 ```ts
 import { openai } from "@ai-sdk/openai"
@@ -44,7 +44,7 @@ import { openai } from "@ai-sdk/openai"
 export const primaryModel = openai("gpt-4.1-mini")
 ```
 
-- [ ] **Step 2: 写 JSON 输出解析**
+- [x] **Step 2: 写 JSON 输出解析**
 
 ```ts
 import type { z } from "zod"
@@ -60,7 +60,7 @@ export function parseStructuredJson<T>(schema: z.ZodType<T>, raw: unknown): T {
 }
 ```
 
-- [ ] **Step 3: 写结构化生成封装**
+- [x] **Step 3: 写结构化生成封装**
 
 ```ts
 import { generateObject } from "ai"
@@ -79,11 +79,15 @@ export async function generateStructuredObject<T>(input: {
     prompt: input.prompt,
   })
 
-  return result.object
+  return parseStructuredJson(input.schema, result.object)
 }
 ```
 
-- [ ] **Step 4: 运行类型检查**
+Audit hardening:
+
+- `generateStructuredObject` 返回前再次通过传入 Zod Schema 校验，避免只信任 provider structured output。
+
+- [x] **Step 4: 运行类型检查**
 
 Run: `npm run typecheck`
 
@@ -94,7 +98,7 @@ Expected: exit code `0`。
 **Files:**
 - Create: `src/server/tools/inspect-capabilities.ts`
 
-- [ ] **Step 1: 写 Mastra tool**
+- [x] **Step 1: 写 Mastra tool**
 
 ```ts
 import { createTool } from "@mastra/core/tools"
@@ -131,7 +135,7 @@ export const inspectCapabilitiesTool = createTool({
 })
 ```
 
-- [ ] **Step 2: 运行类型检查**
+- [x] **Step 2: 运行类型检查**
 
 Run: `npm run typecheck`
 
@@ -143,7 +147,7 @@ Expected: exit code `0`。
 - Create: `src/server/tools/validate-blueprint.ts`
 - Create: `src/server/tools/validate-blueprint.test.ts`
 
-- [ ] **Step 1: 写测试**
+- [x] **Step 1: 写测试**
 
 ```ts
 import { describe, expect, it } from "vitest"
@@ -163,7 +167,7 @@ describe("validateBlueprintCapability", () => {
 })
 ```
 
-- [ ] **Step 2: 实现校验和 Mastra tool**
+- [x] **Step 2: 实现校验和 Mastra tool**
 
 ```ts
 import { createTool } from "@mastra/core/tools"
@@ -210,7 +214,7 @@ export const validateBlueprintTool = createTool({
 })
 ```
 
-- [ ] **Step 3: 运行测试**
+- [x] **Step 3: 运行测试**
 
 Run: `npm run test -- src/server/tools/validate-blueprint.test.ts`
 
@@ -222,7 +226,7 @@ Expected: 1 test passes。
 - Create: `src/server/tools/inspect-build.ts`
 - Create: `src/server/tools/inspect-build.test.ts`
 
-- [ ] **Step 1: 写测试**
+- [x] **Step 1: 写测试**
 
 ```ts
 import { describe, expect, it } from "vitest"
@@ -248,7 +252,7 @@ describe("inspectBuild", () => {
 })
 ```
 
-- [ ] **Step 2: 实现审查和 Mastra tool**
+- [x] **Step 2: 实现审查和 Mastra tool**
 
 ```ts
 import { createTool } from "@mastra/core/tools"
@@ -283,17 +287,22 @@ export function inspectBuild(build: BuildOutput): ReviewResult {
 export const inspectBuildTool = createTool({
   id: "inspect_build",
   description: "静态检查生成应用是否包含入口文件、是否使用禁用依赖，以及是否满足基础运行边界。",
-  inputSchema: buildOutputSchema,
+  inputSchema: z.object({ build: buildInspectionInputSchema }),
   outputSchema: reviewResultSchema,
-  execute: async (inputData) => inspectBuild(inputData),
+  execute: async (inputData) => inspectBuild(inputData.build),
 })
 ```
 
-- [ ] **Step 3: 运行测试**
+Audit hardening:
+
+- `inspectBuild` 使用宽松的 `buildInspectionInputSchema` 接收坏 build，确保可以返回 `missing_file` 等审查结果，而不是在输入 Schema 阶段短路。
+- 静态审查覆盖禁用依赖、外部网络请求、宿主 DOM 访问、脚本注入风险和 localStorage 持久化。
+
+- [x] **Step 3: 运行测试**
 
 Run: `npm run test -- src/server/tools/inspect-build.test.ts`
 
-Expected: 2 tests pass。
+Expected: 5 tests pass。
 
 ## Task 5: 实现 Strategy、Blueprint 和 Builder 工具骨架
 
@@ -303,7 +312,7 @@ Expected: 2 tests pass。
 - Create: `src/server/tools/generate-application.ts`
 - Create: `src/server/generation/prompts/app-builder-prompt.ts`
 
-- [ ] **Step 1: 写 Builder Prompt**
+- [x] **Step 1: 写 Builder Prompt**
 
 ```ts
 export function createAppBuilderPrompt() {
@@ -317,7 +326,7 @@ export function createAppBuilderPrompt() {
 }
 ```
 
-- [ ] **Step 2: 写 Vercel AI SDK Builder 执行函数**
+- [x] **Step 2: 写 Vercel AI SDK Builder 执行函数**
 
 ```ts
 import type { ProductBlueprint } from "@/server/contracts"
@@ -340,7 +349,7 @@ export async function generateApplication(blueprint: ProductBlueprint) {
 }
 ```
 
-- [ ] **Step 3: 在同一文件包装为 Mastra Builder Tool**
+- [x] **Step 3: 在同一文件包装为 Mastra Builder Tool**
 
 ```ts
 import { createTool } from "@mastra/core/tools"
@@ -358,7 +367,7 @@ export const generateApplicationTool = createTool({
 })
 ```
 
-- [ ] **Step 4: 运行类型检查**
+- [x] **Step 4: 运行类型检查**
 
 Run: `npm run typecheck`
 
@@ -369,7 +378,7 @@ Expected: exit code `0`。
 **Files:**
 - Create: `src/server/tools/tool-suite.ts`
 
-- [ ] **Step 1: 写 Mastra 工具套件**
+- [x] **Step 1: 写 Mastra 工具套件**
 
 ```ts
 import { createToolRegistry } from "@/server/agent/tool-registry"
@@ -379,10 +388,14 @@ import { validateBlueprintTool } from "./validate-blueprint"
 import { generateApplicationTool } from "./generate-application"
 
 export const mastraTools = {
+  analyzeProblemTool,
   inspectCapabilitiesTool,
+  createBlueprintTool,
   validateBlueprintTool,
   generateApplicationTool,
   inspectBuildTool,
+  repairApplicationTool,
+  optimizeProductTool,
 }
 
 export function createVentureFlowToolSuite() {
@@ -390,7 +403,7 @@ export function createVentureFlowToolSuite() {
     {
       name: "inspect_build",
       async execute(args) {
-        const result = await inspectBuildTool.execute(args.build as never, {} as never)
+        const result = inspectBuild((args.build ?? state.build) as never)
         return {
           summary: result.passed ? "Build inspection passed" : "Build inspection failed",
           statePatch: { review: result },
@@ -401,13 +414,18 @@ export function createVentureFlowToolSuite() {
 }
 ```
 
-- [ ] **Step 2: 运行验证**
+Audit hardening:
+
+- 工具套件覆盖 `analyze_problem`、`inspect_capabilities`、`create_blueprint`、`validate_blueprint`、`generate_application`、`inspect_build`、`repair_application` 和 `optimize_product`。
+- `src/server/mastra/index.ts` 注册 `mastraTools`，Mastra 调试入口和 Runtime registry 共用同一组工具实现。
+
+- [x] **Step 2: 运行验证**
 
 Run: `npm run typecheck && npm run test -- src/server/tools`
 
 Expected: typecheck 通过，tools 测试通过。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add src/server/ai src/server/tools src/server/generation

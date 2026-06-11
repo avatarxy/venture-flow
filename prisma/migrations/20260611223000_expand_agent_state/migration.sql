@@ -1,0 +1,7 @@
+ALTER TABLE "AgentState"
+ADD COLUMN "originalProblem" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "goal" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "strategy" JSONB,
+ADD COLUMN "blueprint" JSONB,
+ADD COLUMN "build" JSONB,
+ADD COLUMN "review" JSONB;

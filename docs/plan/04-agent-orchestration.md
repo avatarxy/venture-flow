@@ -91,6 +91,7 @@ Audit hardening:
 
 - `canFinish` 使用 Strategy、Blueprint、Build 和 Review 的 Zod Schema 做最终校验。
 - Build 必须通过 contract 层 `/App.tsx` 和文件路径约束。
+- AgentState 支持 `stopped` 状态，用于用户主动停止运行。
 
 - [x] **Step 4: 运行测试**
 
@@ -258,6 +259,11 @@ export function createToolRegistry(tools: AgentTool[]) {
 // Runtime registry 负责按 VentureFlow 的工具白名单查找工具，并把结果转换成 AgentState patch。
 ```
 
+Audit hardening:
+
+- Supervisor 优先通过 Runtime registry 执行工具，工具返回 `summary` 作为 Observation。
+- 直接 executor 仅作为测试或适配层入口，仍需返回受控 `AgentToolResult`。
+
 - [x] **Step 3: 运行类型检查**
 
 Run: `npm run typecheck`
@@ -356,6 +362,13 @@ export async function runSupervisorWithDecisionProvider(initialState: AgentState
 }
 ```
 
+Audit hardening:
+
+- `decide` 返回值必须通过 `agentActionSchema` 校验后才能执行。
+- 工具返回的 state patch 合并后必须通过 `agentStateSchema` 校验后才能保存。
+- `generate_application` 和 `repair_application` 分别受 `MAX_BUILD_ATTEMPTS` 与 `MAX_REPAIR_ATTEMPTS` 限制。
+- 工具调用失败、预算耗尽、决策非法都会写入 `toolCalls` 观察记录。
+
 - [x] **Step 3: 运行测试**
 
 Run: `npm run test -- src/server/agent/supervisor.test.ts`
@@ -373,6 +386,8 @@ Expected: 1 test passes。
 
 ```ts
 import { NextResponse } from "next/server"
+import { saveAgentState } from "@/server/agent-state/agent-state-repository"
+import { createInitialAgentState } from "@/server/agent/state-factory"
 import { getProject } from "@/server/projects/project-repository"
 
 export async function POST(_: Request, { params }: { params: Promise<{ projectId: string }> }) {
@@ -383,7 +398,9 @@ export async function POST(_: Request, { params }: { params: Promise<{ projectId
     return NextResponse.json({ error: "Project not found" }, { status: 404 })
   }
 
-  return NextResponse.json({ projectId, status: "accepted" })
+  const agentState = project.agentState ?? await saveAgentState(createInitialAgentState(project.id, project.originalProblem))
+
+  return NextResponse.json({ projectId, status: "accepted", agentStateStatus: agentState.status })
 }
 ```
 
@@ -409,13 +426,33 @@ export async function GET(_: Request, { params }: { params: Promise<{ projectId:
 
 ```ts
 import { NextResponse } from "next/server"
+import { saveAgentState, stopAgentState } from "@/server/agent-state/agent-state-repository"
+import { createInitialAgentState } from "@/server/agent/state-factory"
+import { getProject } from "@/server/projects/project-repository"
 
 export async function POST(_: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params
+  const project = await getProject(projectId)
+
+  if (!project) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 })
+  }
+
+  if (project.agentState) {
+    await stopAgentState(projectId)
+  } else {
+    await saveAgentState({ ...createInitialAgentState(project.id, project.originalProblem), status: "stopped" })
+  }
 
   return NextResponse.json({ projectId, status: "stopped" })
 }
 ```
+
+Audit hardening:
+
+- `run` route 会为新项目创建并持久化初始 AgentState，不再只返回静态 accepted。
+- `stop` route 会将已存在 AgentState 标记为 `stopped`，没有状态时会创建 stopped 初始状态。
+- AgentState Prisma model 增加 `originalProblem`、`goal`、`strategy`、`blueprint`、`build`、`review`，支持恢复完整 Agent 上下文。
 
 - [x] **Step 4: 运行验证**
 

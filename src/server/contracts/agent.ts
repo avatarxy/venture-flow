@@ -62,7 +62,7 @@ export const agentStateSchema = z.object({
   buildAttempts: z.number().int().nonnegative(),
   repairAttempts: z.number().int().nonnegative(),
   totalTokens: z.number().int().nonnegative(),
-  status: z.enum(["planning", "executing", "waiting_for_user", "completed", "failed"]),
+  status: z.enum(["planning", "executing", "waiting_for_user", "completed", "failed", "stopped"]),
 })
 
 export type ToolName = z.infer<typeof toolNameSchema>

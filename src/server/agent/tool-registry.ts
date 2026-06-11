@@ -27,3 +27,5 @@ export function createToolRegistry(tools: AgentTool[]) {
     },
   }
 }
+
+export type AgentToolRegistry = ReturnType<typeof createToolRegistry>

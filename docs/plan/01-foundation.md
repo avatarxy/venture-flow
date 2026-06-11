@@ -16,7 +16,6 @@
 package.json
 tsconfig.json
 next.config.ts
-tailwind.config.ts
 postcss.config.mjs
 eslint.config.mjs
 vitest.config.ts
@@ -27,7 +26,7 @@ src/app/page.tsx
 src/app/projects/page.tsx
 src/app/projects/[projectId]/page.tsx
 src/app/preview/[projectId]/[versionId]/page.tsx
-src/components/ui/
+src/components/ui/（后续 shadcn/ui 组件目录）
 src/components/layout/AppShell.tsx
 src/lib/env.ts
 src/lib/logger.ts
@@ -51,38 +50,40 @@ src/test/setup.ts
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^1.0.0",
+    "@ai-sdk/openai": "^3.0.69",
     "@mastra/core": "^1.0.0",
     "@prisma/client": "^6.0.0",
-    "@sandpack/react": "^2.20.0",
-    "ai": "^4.0.0",
+    "@codesandbox/sandpack-react": "^2.20.0",
+    "@tailwindcss/postcss": "^4.3.0",
+    "ai": "^6.0.201",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
-    "next": "^15.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "next": "^16.2.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "recharts": "^2.13.0",
     "tailwind-merge": "^2.5.0",
-    "zod": "^3.24.0"
+    "tailwindcss": "^4.3.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^15.0.0",
+    "eslint-config-next": "^16.2.9",
+    "prettier": "^3.8.4",
     "prisma": "^6.0.0",
-    "tailwindcss": "^3.4.0",
-    "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
   }
 }
 ```
@@ -117,66 +118,54 @@ git add package.json tsconfig.json next.config.ts src/app
 git commit -m "chore: initialize next app foundation"
 ```
 
-## Task 2: 配置 Tailwind 与基础 UI
+## Task 2: 配置 Tailwind v4 与基础 UI
 
 **Files:**
-- Create: `tailwind.config.ts`
 - Create: `postcss.config.mjs`
 - Create: `src/app/globals.css`
 - Create: `src/components/layout/AppShell.tsx`
 - Create: `src/lib/utils.ts`
 
-- [ ] **Step 1: 添加 Tailwind token**
+- [ ] **Step 1: 添加 Tailwind v4 PostCSS 配置**
 
-```ts
-import type { Config } from "tailwindcss"
-
-const config: Config = {
-  content: ["./src/**/*.{ts,tsx}"],
-  theme: {
-    extend: {
-      colors: {
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        muted: "hsl(var(--muted))",
-        "muted-foreground": "hsl(var(--muted-foreground))",
-        border: "hsl(var(--border))",
-        primary: "hsl(var(--primary))",
-        "primary-foreground": "hsl(var(--primary-foreground))",
-      },
-      borderRadius: {
-        sm: "4px",
-        md: "6px",
-        lg: "8px",
-      },
-    },
+```js
+const config = {
+  plugins: {
+    "@tailwindcss/postcss": {},
   },
-  plugins: [],
 }
 
 export default config
 ```
 
-- [ ] **Step 2: 添加全局样式**
+- [ ] **Step 2: 添加全局样式和 Tailwind v4 CSS-first token**
 
 ```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222 24% 12%;
-  --muted: 210 20% 96%;
-  --muted-foreground: 215 14% 42%;
-  --border: 214 18% 88%;
-  --primary: 196 72% 34%;
-  --primary-foreground: 0 0% 100%;
+  --color-page: #f7f4ed;
+  --color-ink: #1c1c1c;
+  --color-ink-light: #fcfbf8;
+  --color-gold: #c88d2b;
+  --color-gold-hover: #a87422;
+  --color-muted: #5f5f5d;
+  --color-border: #eceae4;
+}
+
+@theme inline {
+  --color-background: var(--color-page);
+  --color-foreground: var(--color-ink);
+  --color-muted: rgba(28, 28, 28, 0.04);
+  --color-muted-foreground: var(--color-muted);
+  --color-border: var(--color-border);
+  --color-primary: var(--color-gold);
+  --color-primary-foreground: var(--color-ink-light);
 }
 
 body {
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background: var(--color-page);
+  color: var(--color-ink);
 }
 ```
 
@@ -184,13 +173,16 @@ body {
 
 ```tsx
 import type { ReactNode } from "react"
+import Link from "next/link"
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border px-6 py-3">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <span className="text-sm font-semibold">VentureFlow</span>
+          <Link className="text-sm font-semibold" href="/">
+            VentureFlow
+          </Link>
         </div>
       </header>
       {children}
@@ -208,7 +200,7 @@ Expected: 两个命令 exit code 都为 `0`。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add tailwind.config.ts postcss.config.mjs src/app/globals.css src/components src/lib
+git add postcss.config.mjs src/app/globals.css src/components src/lib
 git commit -m "chore: add ui foundation"
 ```
 

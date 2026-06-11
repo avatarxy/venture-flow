@@ -85,6 +85,9 @@ CREATE TABLE "UsageEvent" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Project_currentVersionId_key" ON "Project"("currentVersionId");
+
+-- CreateIndex
 CREATE INDEX "Generation_projectId_createdAt_idx" ON "Generation"("projectId", "createdAt");
 
 -- CreateIndex
@@ -101,6 +104,9 @@ CREATE INDEX "UsageEvent_versionId_createdAt_idx" ON "UsageEvent"("versionId", "
 
 -- CreateIndex
 CREATE INDEX "UsageEvent_eventName_createdAt_idx" ON "UsageEvent"("eventName", "createdAt");
+
+-- AddForeignKey
+ALTER TABLE "Project" ADD CONSTRAINT "Project_currentVersionId_fkey" FOREIGN KEY ("currentVersionId") REFERENCES "GeneratedVersion"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Generation" ADD CONSTRAINT "Generation_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;

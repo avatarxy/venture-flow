@@ -43,11 +43,12 @@ model Project {
   status           ProjectStatus      @default(DRAFT)
   strategy         Json?
   blueprint        Json?
-  currentVersionId String?
+  currentVersionId String?            @unique
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   generations      Generation[]
-  versions         GeneratedVersion[]
+  versions         GeneratedVersion[] @relation("ProjectVersions")
+  currentVersion   GeneratedVersion?  @relation("ProjectCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
   usageEvents      UsageEvent[]
   agentState       AgentState?
 }
@@ -75,7 +76,8 @@ model GeneratedVersion {
   changeSummary     String
   publishStatus     PublishStatus @default(DRAFT)
   createdAt         DateTime      @default(now())
-  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project           Project       @relation("ProjectVersions", fields: [projectId], references: [id], onDelete: Cascade)
+  currentForProject Project?      @relation("ProjectCurrentVersion")
   usageEvents       UsageEvent[]
 
   @@unique([projectId, version])

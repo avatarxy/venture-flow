@@ -75,11 +75,12 @@ model Project {
   status           ProjectStatus      @default(DRAFT)
   strategy         Json?
   blueprint        Json?
-  currentVersionId String?
+  currentVersionId String?            @unique
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   generations      Generation[]
-  versions         GeneratedVersion[]
+  versions         GeneratedVersion[] @relation("ProjectVersions")
+  currentVersion   GeneratedVersion?  @relation("ProjectCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
   usageEvents      UsageEvent[]
   agentState       AgentState?
 }
@@ -94,6 +95,8 @@ model Generation {
   errorMessage String?
   createdAt    DateTime         @default(now())
   project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }
 
 model GeneratedVersion {
@@ -105,10 +108,12 @@ model GeneratedVersion {
   changeSummary     String
   publishStatus     PublishStatus @default(DRAFT)
   createdAt         DateTime      @default(now())
-  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project           Project       @relation("ProjectVersions", fields: [projectId], references: [id], onDelete: Cascade)
+  currentForProject Project?      @relation("ProjectCurrentVersion")
   usageEvents       UsageEvent[]
 
   @@unique([projectId, version])
+  @@index([projectId, createdAt])
 }
 
 model AgentState {
@@ -137,6 +142,7 @@ model UsageEvent {
 
   @@index([projectId, createdAt])
   @@index([versionId, createdAt])
+  @@index([eventName, createdAt])
 }
 ```
 
@@ -293,32 +299,75 @@ git commit -m "feat: add project repository"
 - [ ] **Step 1: 写版本 repository**
 
 ```ts
+import type { Prisma } from "@prisma/client"
+import { Prisma as PrismaRuntime } from "@prisma/client"
 import { prisma } from "@/server/db/client"
-import type { ProductBlueprint } from "@/server/contracts/blueprint"
-import type { GeneratedFile } from "@/server/contracts/build"
+
+export type GeneratedVersionFile = {
+  path: string
+  content: string
+}
+
+const MAX_VERSION_CREATE_RETRIES = 3
+
+function isRetryableVersionCreateError(error: unknown) {
+  const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined
+
+  return code === "P2002" || code === "P2034"
+}
 
 export async function createGeneratedVersion(input: {
   projectId: string
-  files: GeneratedFile[]
-  blueprintSnapshot: ProductBlueprint
+  files: GeneratedVersionFile[]
+  blueprintSnapshot: Prisma.InputJsonValue
   changeSummary: string
 }) {
-  const latest = await prisma.generatedVersion.findFirst({
-    where: { projectId: input.projectId },
-    orderBy: { version: "desc" },
-  })
+  let lastError: unknown
 
-  const version = (latest?.version ?? 0) + 1
+  for (let attempt = 0; attempt < MAX_VERSION_CREATE_RETRIES; attempt++) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const latest = await tx.generatedVersion.findFirst({
+            where: { projectId: input.projectId },
+            orderBy: { version: "desc" },
+          })
 
-  return prisma.generatedVersion.create({
-    data: {
-      projectId: input.projectId,
-      version,
-      files: input.files,
-      blueprintSnapshot: input.blueprintSnapshot,
-      changeSummary: input.changeSummary,
-    },
-  })
+          const version = (latest?.version ?? 0) + 1
+
+          const generatedVersion = await tx.generatedVersion.create({
+            data: {
+              projectId: input.projectId,
+              version,
+              files: input.files,
+              blueprintSnapshot: input.blueprintSnapshot,
+              changeSummary: input.changeSummary,
+            },
+          })
+
+          await tx.project.update({
+            where: { id: input.projectId },
+            data: { currentVersionId: generatedVersion.id },
+          })
+
+          return generatedVersion
+        },
+        {
+          isolationLevel: PrismaRuntime.TransactionIsolationLevel.Serializable,
+        },
+      )
+    } catch (error) {
+      lastError = error
+
+      if (isRetryableVersionCreateError(error)) {
+        continue
+      }
+
+      throw error
+    }
+  }
+
+  throw lastError
 }
 ```
 
@@ -358,30 +407,67 @@ export async function recordUsageEvent(input: {
 - [ ] **Step 3: 写 AgentState repository**
 
 ```ts
+import type { Prisma } from "@prisma/client"
+import { z } from "zod"
 import { prisma } from "@/server/db/client"
-import type { AgentState } from "@/server/contracts/agent"
 
-export async function saveAgentState(state: AgentState) {
+const persistedPlanItemSchema = z.object({
+  title: z.string().min(1),
+  status: z.enum(["pending", "running", "completed", "failed"]),
+})
+
+const persistedToolCallSchema = z.object({
+  toolName: z.string().min(1),
+  reasoningSummary: z.string(),
+  argumentsSummary: z.string(),
+  resultSummary: z.string().optional(),
+  status: z.enum(["running", "completed", "failed"]),
+  startedAt: z.string().min(1),
+  endedAt: z.string().optional(),
+  errorMessage: z.string().optional(),
+  tokenUsage: z.number().int().nonnegative().default(0),
+})
+
+const persistedAgentStateSchema = z.object({
+  projectId: z.string().min(1),
+  status: z.enum(["planning", "executing", "waiting_for_user", "completed", "failed"]),
+  currentPlan: z.array(persistedPlanItemSchema),
+  currentStep: z.number().int().nonnegative(),
+  toolCalls: z.array(persistedToolCallSchema),
+  buildAttempts: z.number().int().nonnegative(),
+  repairAttempts: z.number().int().nonnegative(),
+  totalTokens: z.number().int().nonnegative(),
+})
+
+export type PersistedAgentState = z.infer<typeof persistedAgentStateSchema>
+
+export function validateAgentStateForPersistence(state: unknown): PersistedAgentState {
+  return persistedAgentStateSchema.parse(state)
+}
+
+export async function saveAgentState(state: unknown) {
+  const parsedState = validateAgentStateForPersistence(state)
+
   return prisma.agentState.upsert({
-    where: { projectId: state.projectId },
+    where: { projectId: parsedState.projectId },
     create: {
-      projectId: state.projectId,
-      status: state.status,
-      currentPlan: state.currentPlan,
-      currentStep: state.currentStep,
-      toolCalls: state.toolCalls,
-      buildAttempts: state.buildAttempts,
-      repairAttempts: state.repairAttempts,
-      totalTokens: state.totalTokens,
+      projectId: parsedState.projectId,
+      status: parsedState.status,
+      currentPlan: parsedState.currentPlan as Prisma.InputJsonValue,
+      currentStep: parsedState.currentStep,
+      toolCalls: parsedState.toolCalls as Prisma.InputJsonValue,
+      buildAttempts: parsedState.buildAttempts,
+      repairAttempts: parsedState.repairAttempts,
+      totalTokens: parsedState.totalTokens,
     },
     update: {
-      status: state.status,
-      currentPlan: state.currentPlan,
-      currentStep: state.currentStep,
-      toolCalls: state.toolCalls,
-      buildAttempts: state.buildAttempts,
-      repairAttempts: state.repairAttempts,
-      totalTokens: state.totalTokens,
+      status: parsedState.status,
+      currentPlan: parsedState.currentPlan as Prisma.InputJsonValue,
+      currentStep: parsedState.currentStep,
+      toolCalls: parsedState.toolCalls as Prisma.InputJsonValue,
+      buildAttempts: parsedState.buildAttempts,
+      repairAttempts: parsedState.repairAttempts,
+      totalTokens: parsedState.totalTokens,
     },
   })
 }
@@ -399,4 +485,3 @@ Expected: exit code `0`。
 git add src/server/versions src/server/events src/server/agent-state
 git commit -m "feat: add persistence repositories"
 ```
-

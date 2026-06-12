@@ -16,7 +16,7 @@ export const entitySchema = z.object({
   name: z.string().regex(/^[A-Z][a-zA-Z0-9]*$/),
   label: z.string().min(1),
   description: z.string().optional(),
-  fields: z.array(fieldSchema).min(2).max(12),
+  fields: z.array(fieldSchema).min(1).max(12),
 })
 
 export const componentSchema = z.object({

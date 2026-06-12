@@ -30,7 +30,7 @@ const looseBlueprintSchema = z.object({
     name: z.string(),
     label: z.string().min(1),
     description: z.string().optional(),
-    fields: z.array(looseFieldSchema).min(2).max(12),
+    fields: z.array(looseFieldSchema).min(1).max(12),
   })).min(1).max(4),
   pages: z.array(z.object({
     id: z.string(),
@@ -221,22 +221,40 @@ export function normalizeGeneratedBlueprint(blueprint: LooseBlueprint): ProductB
 }
 
 export async function createBlueprint(input: z.infer<typeof createBlueprintInputSchema>) {
-  const rawBlueprint = await generateStructuredObject({
-    schema: looseBlueprintSchema,
-    system:
-      `你是 VentureFlow 的 Product Blueprint Agent。请把 Strategy 转成可生成应用的产品蓝图，严格控制在 MVP 能力边界内，实体不超过 4 个，页面不超过 5 个。
+  let lastError: string | undefined
+
+  // 最多重试 2 次，每次把上次失败的校验错误告诉 AI
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const retryHint = attempt > 0 && lastError
+      ? `\n\n上一轮输出未通过校验，请修正以下问题后重新输出完整 Blueprint JSON：\n${lastError}`
+      : ""
+
+    const rawBlueprint = await generateStructuredObject({
+      schema: looseBlueprintSchema,
+      system:
+        `你是 VentureFlow 的 Product Blueprint Agent。请把策略转成可生成应用的产品蓝图，严格控制在 MVP 能力边界内，实体不超过 4 个，页面不超过 5 个。
 
 标识符规则：
 - entities[].name 使用英文 PascalCase，例如 Lead、Customer、FollowUp。
 - entities[].fields[].name 使用英文 camelCase，例如 name、status、nextFollowUpDate。
+- entities[].fields 至少包含 1 个字段（推荐 2-5 个）。
 - pages[].id 使用英文 kebab-case，例如 leads、sales-dashboard。
 - components[].entityName 必须引用 entities[].name。
 - seedData 的 key 必须使用 entities[].name，seed row 字段必须使用 fields[].name。
-- 中文说明请放在 label、name、title、description、purpose 等面向用户字段里。`,
-    prompt: JSON.stringify(input, null, 2),
-  })
+- 中文说明请放在 label、name、title、description、purpose 等面向用户字段里。${retryHint}`,
+      prompt: JSON.stringify(input, null, 2),
+    })
 
-  return normalizeGeneratedBlueprint(rawBlueprint)
+    try {
+      return normalizeGeneratedBlueprint(rawBlueprint)
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Unknown validation error"
+      if (attempt >= 2) throw error // 最后一次仍然失败则抛出
+    }
+  }
+
+  // TypeScript 需要这行，但永远不会执行
+  throw new Error("Unreachable")
 }
 
 export const createBlueprintTool = createTool({

@@ -1,6 +1,41 @@
+import { z } from "zod"
 import * as prettier from "prettier"
 import type { BuildOutput } from "@/server/contracts"
 import { sanitizeGeneratedFileContent } from "./generated-file-quality"
+
+/**
+ * 宽松版文件 Schema：路径格式放宽（AI 偶尔忘加 / 前缀或带 ./）。
+ * 配合 normalizeFilePath 使用：先生成 → 标准化路径 → 严格校验。
+ */
+export const looseFileSchema = z.object({
+  path: z.string().min(1),
+  content: z.string().min(1),
+})
+
+export const looseBuildOutputSchema = z.object({
+  summary: z.string().min(1),
+  files: z.array(looseFileSchema).min(1),
+})
+
+/**
+ * 标准化文件路径：确保以 / 开头，去除 ./ 或 ../ 前缀。
+ *
+ * 示例：
+ * - "App.tsx"       → "/App.tsx"
+ * - "./src/main.tsx" → "/src/main.tsx"
+ * - "src/App.tsx"    → "/src/App.tsx"
+ * - "/App.tsx"       → "/App.tsx" (不变)
+ */
+export function normalizeFilePath(raw: string): string {
+  let path = raw.trim()
+
+  if (path.startsWith("./")) path = path.slice(2)
+  while (path.startsWith("../")) path = path.slice(3)
+
+  if (!path.startsWith("/")) path = `/${path}`
+
+  return path
+}
 
 const formattableExtensions = new Set([
   ".css",

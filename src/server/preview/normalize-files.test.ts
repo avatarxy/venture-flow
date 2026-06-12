@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest"
 import {
   getVisibleGeneratedFilePaths,
   normalizeSandpackFiles,
+  sandpackGeneratedAppDependencies,
 } from "./normalize-files"
 
 describe("normalizeSandpackFiles", () => {
-  it("adds Sandpack boot files and preserves generated files", () => {
+  it("adds Sandpack boot files without overriding template package and preserves generated files", () => {
     const files = normalizeSandpackFiles([
       {
         path: "/App.tsx",
@@ -15,23 +16,17 @@ describe("normalizeSandpackFiles", () => {
 
     expect(files["/App.tsx"].code).toContain("export default")
     expect(files["/App.tsx"].active).toBe(true)
-    expect(files["/package.json"].code).toContain("react")
+    expect(files["/package.json"]).toBeUndefined()
     expect(files["/index.html"].code).toContain("src/main.tsx")
     expect(files["/src/main.tsx"].code).toContain("createRoot")
   })
 
-  it("pins Sandpack runtime dependencies instead of using latest", () => {
-    const files = normalizeSandpackFiles([
-      {
-        path: "/App.tsx",
-        content: "export default function App() { return <main>Hello</main> }",
-      },
-    ])
-    const packageJson = JSON.parse(files["/package.json"].code) as { dependencies: Record<string, string> }
-
-    expect(Object.values(packageJson.dependencies)).not.toContain("latest")
-    expect(packageJson.dependencies.react).toBe("18.2.0")
-    expect(packageJson.dependencies.vite).toBe("5.4.21")
+  it("provides generated app dependencies through Sandpack custom setup", () => {
+    expect(sandpackGeneratedAppDependencies.dependencies).toEqual({
+      "lucide-react": "0.468.0",
+      recharts: "2.13.3",
+    })
+    expect(Object.values(sandpackGeneratedAppDependencies.dependencies)).not.toContain("latest")
   })
 
   it("keeps supporting generated files visible and inactive", () => {
@@ -73,20 +68,21 @@ describe("normalizeSandpackFiles", () => {
     expect(files["/App.tsx"].code).toBe("export default function App() { return null }")
   })
 
-  it("rejects generated files that try to override Sandpack runtime files", () => {
-    expect(() =>
-      normalizeSandpackFiles([
-        {
-          path: "/App.tsx",
-          content: "export default function App() { return null }",
-        },
-        {
-          path: "/package.json",
-          content: '{"dependencies":{"left-pad":"latest"}}',
-        },
-      ]),
-    ).toThrow(
-      "Generated app cannot override Sandpack runtime file: /package.json",
-    )
+  it("silently skips generated files that conflict with Sandpack runtime files instead of crashing", () => {
+    const files = normalizeSandpackFiles([
+      {
+        path: "/App.tsx",
+        content: "export default function App() { return null }",
+      },
+      {
+        path: "/package.json",
+        content: '{"dependencies":{"left-pad":"latest"}}',
+      },
+    ])
+
+    // Runtime file override is silently skipped, App.tsx still present
+    expect(files["/App.tsx"].code).toBe("export default function App() { return null }")
+    // /package.json 由 Sandpack 模板维护，避免破坏 Nodebox 内置 Vite 依赖
+    expect(files["/package.json"]).toBeUndefined()
   })
 })

@@ -4,24 +4,28 @@ import type { ProductBlueprint } from "@/server/contracts"
 import { buildOutputSchema, productBlueprintSchema } from "@/server/contracts"
 import { generateStructuredObject } from "@/server/ai/generate-structured"
 import { createAppBuilderPrompt } from "@/server/generation/prompts/app-builder-prompt"
-import { prepareGeneratedBuild } from "./format-generated-build"
+import { looseBuildOutputSchema, normalizeFilePath, prepareGeneratedBuild } from "./format-generated-build"
 
 export async function generateApplication(blueprint: ProductBlueprint) {
-  const build = await generateStructuredObject({
-    schema: buildOutputSchema,
+  // 先用宽松 schema 接收 AI 输出（容错路径格式问题）
+  const rawBuild = await generateStructuredObject({
+    schema: looseBuildOutputSchema,
     system: createAppBuilderPrompt(),
     prompt: JSON.stringify(blueprint, null, 2),
   })
 
-  const preparedBuild = await prepareGeneratedBuild(build)
-
-  // 业务守卫：即使 Schema 层 superRefine 已校验，此处显式断言 /App.tsx 存在性
-  // 确保后续修改 Schema 不会意外移除此关键约束
-  if (!preparedBuild.files.some((file) => file.path === "/App.tsx")) {
-    throw new Error("生成结果缺少 /App.tsx 入口文件")
+  // 标准化所有文件路径
+  const build = {
+    summary: rawBuild.summary,
+    files: rawBuild.files.map((file) => ({
+      ...file,
+      path: normalizeFilePath(file.path),
+    })),
   }
 
-  return preparedBuild
+  // 用严格 schema 二次校验（确保 /App.tsx 必含、路径无重复等）
+  const validated = buildOutputSchema.parse(build)
+  return prepareGeneratedBuild(validated)
 }
 
 export const generateApplicationTool = createTool({

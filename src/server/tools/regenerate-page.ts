@@ -3,7 +3,7 @@ import { z } from "zod"
 import { generateStructuredObject } from "@/server/ai/generate-structured"
 import { buildOutputSchema, productBlueprintSchema } from "@/server/contracts"
 import { generationSafetyConstraints } from "@/server/generation/prompts/app-builder-prompt"
-import { prepareGeneratedBuild } from "./format-generated-build"
+import { looseBuildOutputSchema, normalizeFilePath, prepareGeneratedBuild } from "./format-generated-build"
 
 export const regeneratePageInputSchema = z.object({
   blueprint: productBlueprintSchema,
@@ -19,10 +19,10 @@ export const regeneratePageInputSchema = z.object({
  * 基于用户反馈重新生成应用中的指定页面，保留其他页面不变
  */
 export async function regeneratePage(input: z.infer<typeof regeneratePageInputSchema>) {
-  const result = await generateStructuredObject({
-    schema: buildOutputSchema,
+  const rawResult = await generateStructuredObject({
+    schema: looseBuildOutputSchema,
     system: `你是 VentureFlow 的应用修改 Agent。
-优先按用户指定的 targetPage 修改对应页面。若 targetPage 为“应用”或用户要求涉及导航、共享组件、跨页面功能、文案联动，可以修改必要的相关文件；未涉及文件保持不变。
+优先按用户指定的 targetPage 修改对应页面。若 targetPage 为"应用"或用户要求涉及导航、共享组件、跨页面功能、文案联动，可以修改必要的相关文件；未涉及文件保持不变。
 输出完整 BuildOutput，必须包含修改后的全部文件内容。
 ${generationSafetyConstraints}`,
     prompt: JSON.stringify(
@@ -38,7 +38,13 @@ ${generationSafetyConstraints}`,
     ),
   })
 
-  return prepareGeneratedBuild(result)
+  // 标准化文件路径并严格校验
+  const result = {
+    summary: rawResult.summary,
+    files: rawResult.files.map((file) => ({ ...file, path: normalizeFilePath(file.path) })),
+  }
+
+  return prepareGeneratedBuild(buildOutputSchema.parse(result))
 }
 
 export const regeneratePageTool = createTool({

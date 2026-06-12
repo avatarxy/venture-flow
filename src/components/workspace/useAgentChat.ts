@@ -94,18 +94,18 @@ function friendlyToolName(name: string) {
 // ---------------------------------------------------------------------------
 
 class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
-  private latestAgentMessage: AgentMessagePayload | null = null
   private latestAgentMessages: AgentMessagePayload[] = []
+  private onCardCallback: ((msg: AgentMessagePayload) => void) | null = null
 
   constructor(private readonly api: string) {}
 
-  clearAgentMessage() {
-    this.latestAgentMessage = null
-    this.latestAgentMessages = []
+  /** 注册回调：每完成一个步骤就触发一次，用于注入独立卡片 */
+  onCard(cb: (msg: AgentMessagePayload) => void) {
+    this.onCardCallback = cb
   }
 
-  getAgentMessage() {
-    return this.latestAgentMessage
+  clearAgentMessages() {
+    this.latestAgentMessages = []
   }
 
   getAgentMessages() {
@@ -144,12 +144,11 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
 
     const contentType = response.headers.get("content-type") ?? ""
 
-    // ── SSE 流式模式 ──
     if (contentType.includes("text/event-stream") && response.body) {
       return this.handleSSEStream(response.body, options.abortSignal)
     }
 
-    // ── 回退：JSON 模式（向后兼容） ──
+    // JSON fallback
     let payload: {
       agentMessage?: AgentMessagePayload
       agentMessages?: AgentMessagePayload[]
@@ -163,38 +162,20 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
     }
 
     const rawMessages = payload.agentMessages?.length ? payload.agentMessages : payload.agentMessage ? [payload.agentMessage] : []
-
     if (rawMessages.length === 0) {
-      throw new AgentTransportError(
-        payload.error ?? "Agent 没有返回可展示消息",
-        "AGENT_ERROR",
-      )
+      throw new AgentTransportError(payload.error ?? "Agent 没有返回可展示消息", "AGENT_ERROR")
     }
 
     const agentMessages: AgentMessagePayload[] = rawMessages.map((msg) => ({
       ...msg,
-      metadata: {
-        ...(msg.metadata ?? {}),
-        type: msg.type,
-        agentState: payload.agentState,
-      },
+      metadata: { ...(msg.metadata ?? {}), type: msg.type, agentState: payload.agentState },
     }))
-    const agentMessage = agentMessages.at(-1)
-    if (!agentMessage) {
-      throw new AgentTransportError("Agent 没有返回可展示消息", "AGENT_ERROR")
-    }
-
-    this.latestAgentMessage = agentMessage
     this.latestAgentMessages = agentMessages
 
     return createSingleMessageStream(agentMessages.map((msg) => msg.content).join("\n\n"))
   }
 
-  /**
-   * 解析 SSE 流并实时推送 text-delta chunks 到 AI SDK
-   */
   private handleSSEStream(body: ReadableStream<Uint8Array>, abortSignal?: AbortSignal): ReadableStream<UIMessageChunk> {
-    const collectedMessages: AgentMessagePayload[] = []
     const messageId = `agent-${crypto.randomUUID()}`
     let started = false
 
@@ -215,10 +196,7 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
 
         try {
           while (true) {
-            if (abortSignal?.aborted) {
-              controller.close()
-              return
-            }
+            if (abortSignal?.aborted) { controller.close(); return }
 
             const { done, value } = await reader.read()
             if (done) break
@@ -237,39 +215,39 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
 
                 switch (event.type) {
                   case "thinking": {
-                    // 仅显示进度指示，不输出静态管道描述文本
-                    pushText(`⏳ ${friendlyToolName(event.toolName)}...\n`)
+                    const detail = event.message ? ` — ${event.message}` : ""
+                    pushText(`⏳ ${friendlyToolName(event.toolName)}${detail}\n`)
                     break
                   }
 
                   case "result": {
-                    collectedMessages.push(event.message)
-                    // 仅推送有实质内容的结果（跳过 inspect_capabilities 等后台步骤）
-                    if (event.message.content) {
-                      pushText(`\n${event.message.content}\n`)
+                    this.latestAgentMessages.push(event.message)
+                    // 通过回调即时注入独立卡片
+                    if (event.message.content && this.onCardCallback) {
+                      this.onCardCallback(event.message)
                     }
                     break
                   }
 
                   case "state":
-                    // 状态更新只影响进度条，不需要额外文本
                     break
 
                   case "done": {
-                    if (event.finalMessage && !collectedMessages.some((m) => m === event.finalMessage)) {
-                      collectedMessages.push(event.finalMessage)
+                    if (event.finalMessage && !this.latestAgentMessages.includes(event.finalMessage)) {
+                      this.latestAgentMessages.push(event.finalMessage)
+                      if (event.finalMessage.content && this.onCardCallback) {
+                        this.onCardCallback(event.finalMessage)
+                      }
                     }
                     break
                   }
 
                   case "error": {
-                    pushText(`\n\n❌ ${event.message}\n`)
+                    pushText(`❌ ${event.message}\n`)
                     break
                   }
                 }
-              } catch {
-                // skip malformed SSE data
-              }
+              } catch { /* skip malformed SSE data */ }
             }
           }
 
@@ -277,16 +255,8 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
             controller.enqueue({ type: "text-end" as const, id: messageId })
           }
           controller.close()
-
-          // 保存收集到的消息用于后续替换
-          if (collectedMessages.length > 0) {
-            this.latestAgentMessage = collectedMessages.at(-1) ?? null
-            this.latestAgentMessages = collectedMessages
-          }
         } catch (error) {
-          if (started) {
-            controller.enqueue({ type: "text-end" as const, id: messageId })
-          }
+          if (started) { controller.enqueue({ type: "text-end" as const, id: messageId }) }
           const errMsg = error instanceof Error ? error.message : "流读取失败"
           controller.error(new AgentTransportError(errMsg, "STREAM_ERROR"))
         }
@@ -294,16 +264,11 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
     })
   }
 
-  async reconnectToStream() {
-    return null
-  }
+  async reconnectToStream() { return null }
 }
 
 class AgentTransportError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-  ) {
+  constructor(message: string, public readonly code: string) {
     super(message)
     this.name = "AgentTransportError"
   }
@@ -315,7 +280,6 @@ class AgentTransportError extends Error {
 
 function createSingleMessageStream(content: string): ReadableStream<UIMessageChunk> {
   const id = `agent-${crypto.randomUUID()}`
-
   return new ReadableStream<UIMessageChunk>({
     start(controller) {
       controller.enqueue({ type: "text-start", id })
@@ -327,8 +291,8 @@ function createSingleMessageStream(content: string): ReadableStream<UIMessageChu
 }
 
 function findLastAssistantIndex(messages: WorkspaceUiMessage[]) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index]?.role === "assistant") return index
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === "assistant") return i
   }
   return -1
 }
@@ -344,12 +308,15 @@ function createSystemError(id: string, message: string): SystemErrorMessage {
   }
 }
 
-function createWorkspaceMessage(message: AgentMessagePayload, index: number): WorkspaceUiMessage {
+function createCardMessage(msg: AgentMessagePayload, index: number): WorkspaceUiMessage {
   return {
-    id: `agent-msg-${Date.now()}-${index}`,
-    role: message.role === "system" ? "system" : "assistant",
-    parts: toAiTextPart(message.content),
-    metadata: message.metadata ?? { type: message.type },
+    id: `agent-card-${Date.now()}-${index}`,
+    role: msg.role === "system" ? "system" : "assistant",
+    parts: toAiTextPart(msg.content),
+    metadata: {
+      ...(msg.metadata ?? {}),
+      type: msg.type, // ensure getMessageType() can find it
+    },
   } as WorkspaceUiMessage
 }
 
@@ -367,6 +334,8 @@ export function useAgentChat({
   const [previewFiles, setPreviewFiles] = useState(initialPreviewFiles)
   const [activePane, setActivePane] = useState<"chat" | "preview">("chat")
   const autoStarted = useRef(false)
+  const pendingCards = useRef<WorkspaceUiMessage[]>([])
+  const cardIndex = useRef(0)
 
   const transport = useMemo(() => new VentureFlowAgentTransport(`/api/projects/${projectId}/agent/messages`), [projectId])
 
@@ -384,7 +353,24 @@ export function useAgentChat({
       const trimmed = content.trim()
       if (trimmed.length < 2) return
 
-      transport.clearAgentMessage()
+      transport.clearAgentMessages()
+      pendingCards.current = []
+      cardIndex.current = 0
+
+      // 注册回调：每完成一步就注入独立卡片
+      transport.onCard((cardMsg: AgentMessagePayload) => {
+        const card = createCardMessage(cardMsg, cardIndex.current++)
+        pendingCards.current = [...pendingCards.current, card]
+
+        // 将卡片即时插入到流式消息之前
+        setMessages((prev) => {
+          const streamingIdx = findLastAssistantIndex(prev)
+          if (streamingIdx === -1) return prev as WorkspaceUiMessage[]
+          const before = prev.slice(0, streamingIdx)
+          const after = prev.slice(streamingIdx) // 流式消息保持在末尾
+          return [...before, ...pendingCards.current, ...after] as WorkspaceUiMessage[]
+        })
+      })
 
       try {
         await sendMessage({ text: trimmed })
@@ -395,30 +381,22 @@ export function useAgentChat({
             : error instanceof Error
               ? error.message
               : "未知错误"
-
-        setMessages((prev) => [
-          ...prev,
-          createSystemError(`err-${Date.now()}`, detail),
-        ] as WorkspaceUiMessage[])
+        setMessages((prev) => [...prev, createSystemError(`err-${Date.now()}`, detail)] as WorkspaceUiMessage[])
         return
       }
 
-      const agentMessages = transport.getAgentMessages()
-      const agentMessage = transport.getAgentMessage()
-      if (!agentMessage || agentMessages.length === 0) return
-
-      // 替换流式占位消息为独立的卡片消息
-      setMessages((currentMessages) => {
-        const nextMessages = [...currentMessages]
-        const assistantIndex = findLastAssistantIndex(nextMessages)
-        if (assistantIndex === -1) return currentMessages
-        const transcriptMessages = agentMessages.map(createWorkspaceMessage)
-        nextMessages.splice(assistantIndex, 1, ...transcriptMessages)
-        return nextMessages as WorkspaceUiMessage[]
+      // 流式结束 → 移除以"⏳"开头的流式占位消息
+      setMessages((prev) => {
+        const streamingIdx = findLastAssistantIndex(prev)
+        if (streamingIdx === -1) return prev as WorkspaceUiMessage[]
+        const before = prev.slice(0, streamingIdx)
+        const after = prev.slice(streamingIdx + 1)
+        return [...before, ...after] as WorkspaceUiMessage[]
       })
 
-      // Extract preview files from build metadata
-      const files = agentMessages.flatMap((msg) =>
+      // Extract preview files
+      const allMessages = transport.getAgentMessages()
+      const files = allMessages.flatMap((msg) =>
         extractPreviewFiles({
           id: `agent-metadata-${Date.now()}`,
           role: "assistant",
@@ -436,9 +414,7 @@ export function useAgentChat({
 
   // ---- Auto-start -------------------------------------------------------
   useEffect(() => {
-    if (autoStarted.current || initialMessages.length > 0 || originalProblem.trim().length < 2) {
-      return
-    }
+    if (autoStarted.current || initialMessages.length > 0 || originalProblem.trim().length < 2) return
     autoStarted.current = true
     void submitMessage(originalProblem)
   }, [initialMessages.length, originalProblem, submitMessage])
@@ -455,22 +431,11 @@ export function useAgentChat({
     [input, submitMessage],
   )
 
-  // ---- Stop handler ----------------------------------------------------
-  const handleStop = useCallback(() => {
-    void stop()
-  }, [stop])
+  const handleStop = useCallback(() => { void stop() }, [stop])
 
   return {
-    messages,
-    input,
-    previewFiles,
-    activePane,
-    isLoading,
-    setInput,
-    setActivePane,
-    submitMessage,
-    handleSubmit,
-    handleStop,
+    messages, input, previewFiles, activePane, isLoading,
+    setInput, setActivePane, submitMessage, handleSubmit, handleStop,
   }
 }
 

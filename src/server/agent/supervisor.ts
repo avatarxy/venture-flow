@@ -322,15 +322,34 @@ function updatePlanForTool(state: AgentState, toolName: ToolName, status: "runni
 }
 
 function createThinkingMessage(action: ToolAction, state: AgentState): AgentVisibleMessage {
+  const detail = toolThinkingDetail(action.toolName, state)
   return {
     role: "agent",
     type: "agent-thinking",
-    content: `正在执行：${action.toolName}\n\n${action.reasoningSummary}`,
+    content: `正在执行：${action.toolName}${detail ? ` — ${detail}` : ""}`,
     metadata: {
       toolName: action.toolName,
       reasoningSummary: action.reasoningSummary,
       agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan },
     },
+  }
+}
+
+function toolThinkingDetail(toolName: string, state: AgentState): string {
+  switch (toolName) {
+    case "generate_application": {
+      const pages = state.blueprint?.pages?.map((p: { name: string }) => p.name).join("、") ?? ""
+      const entityCount = state.blueprint?.entities?.length ?? 0
+      return `正在生成 ${pages ? `${pages} 等 ` : ""}${entityCount} 个实体的 React 应用`
+    }
+    case "repair_application": {
+      const issues = state.review?.issues?.length ?? 0
+      return `正在修复 ${issues} 个审查问题`
+    }
+    case "analyze_problem":
+      return `正在分析：${state.originalProblem.slice(0, 60)}...`
+    default:
+      return ""
   }
 }
 
@@ -485,11 +504,12 @@ async function runAgentTurnStream(
 
     // ── Step start: push thinking event ──
     state = { ...state, currentPlan: updatePlanForTool(state, action.toolName, "running") }
+    const thinkingDetail = toolThinkingDetail(action.toolName, state)
     emit({
       type: "thinking",
       step,
       toolName: action.toolName,
-      message: action.reasoningSummary,
+      message: thinkingDetail,
       plan: state.currentPlan,
     })
 

@@ -36,8 +36,43 @@ type SystemErrorMessage = {
   metadata: { error: true; message: string }
 }
 
+// SSE event types (matches supervisor.ts StreamEvent)
+type SSEStepEvent = {
+  type: "thinking"
+  step: number
+  toolName: string
+  message: string
+  plan: unknown[]
+}
+
+type SSEStateEvent = {
+  type: "state"
+  step: number
+  status: string
+  plan: unknown[]
+}
+
+type SSEResultEvent = {
+  type: "result"
+  message: AgentMessagePayload
+  plan: unknown[]
+}
+
+type SSEDoneEvent = {
+  type: "done"
+  status: string
+  finalMessage?: AgentMessagePayload
+}
+
+type SSEErrorEvent = {
+  type: "error"
+  message: string
+}
+
+type SSEEvent = SSEStepEvent | SSEStateEvent | SSEResultEvent | SSEDoneEvent | SSEErrorEvent
+
 // ---------------------------------------------------------------------------
-// Transport
+// SSE Transport
 // ---------------------------------------------------------------------------
 
 class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
@@ -76,15 +111,30 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
         signal: options.abortSignal,
       })
     } catch (error) {
-      // Network errors (offline, DNS, CORS, etc.)
       const detail = error instanceof Error ? error.message : "网络连接失败"
       throw new AgentTransportError(detail, "NETWORK_ERROR")
     }
 
+    if (!response.ok) {
+      let errorMsg = `Agent 响应失败 (HTTP ${response.status})`
+      try {
+        const errPayload = (await response.json()) as { error?: string }
+        errorMsg = errPayload.error ?? errorMsg
+      } catch { /* ignore parse errors */ }
+      throw new AgentTransportError(errorMsg, "AGENT_ERROR")
+    }
+
+    const contentType = response.headers.get("content-type") ?? ""
+
+    // ── SSE 流式模式 ──
+    if (contentType.includes("text/event-stream") && response.body) {
+      return this.handleSSEStream(response.body, options.abortSignal)
+    }
+
+    // ── 回退：JSON 模式（向后兼容） ──
     let payload: {
       agentMessage?: AgentMessagePayload
       agentMessages?: AgentMessagePayload[]
-      agentStatus?: string
       agentState?: Record<string, unknown>
       error?: string
     }
@@ -96,19 +146,18 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
 
     const rawMessages = payload.agentMessages?.length ? payload.agentMessages : payload.agentMessage ? [payload.agentMessage] : []
 
-    if (!response.ok || rawMessages.length === 0) {
+    if (rawMessages.length === 0) {
       throw new AgentTransportError(
-        payload.error ?? `Agent 响应失败 (HTTP ${response.status})`,
+        payload.error ?? "Agent 没有返回可展示消息",
         "AGENT_ERROR",
       )
     }
 
-    const agentMessages: AgentMessagePayload[] = rawMessages.map((message) => ({
-      ...message,
+    const agentMessages: AgentMessagePayload[] = rawMessages.map((msg) => ({
+      ...msg,
       metadata: {
-        ...(message.metadata ?? {}),
-        type: message.type,
-        agentStatus: payload.agentStatus,
+        ...(msg.metadata ?? {}),
+        type: msg.type,
         agentState: payload.agentState,
       },
     }))
@@ -120,7 +169,112 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
     this.latestAgentMessage = agentMessage
     this.latestAgentMessages = agentMessages
 
-    return createSingleMessageStream(agentMessages.map((message) => message.content).join("\n\n"))
+    return createSingleMessageStream(agentMessages.map((msg) => msg.content).join("\n\n"))
+  }
+
+  /**
+   * 解析 SSE 流并实时推送 text-delta chunks 到 AI SDK
+   */
+  private handleSSEStream(body: ReadableStream<Uint8Array>, abortSignal?: AbortSignal): ReadableStream<UIMessageChunk> {
+    const collectedMessages: AgentMessagePayload[] = []
+    const messageId = `agent-${crypto.randomUUID()}`
+    let started = false
+
+    return new ReadableStream<UIMessageChunk>({
+      start: async (controller) => {
+        const reader = body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
+
+        const pushText = (text: string) => {
+          if (!text) return
+          if (!started) {
+            controller.enqueue({ type: "text-start" as const, id: messageId })
+            started = true
+          }
+          controller.enqueue({ type: "text-delta" as const, id: messageId, delta: text })
+        }
+
+        try {
+          while (true) {
+            if (abortSignal?.aborted) {
+              controller.close()
+              return
+            }
+
+            const { done, value } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split("\n")
+            buffer = lines.pop() ?? ""
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue
+              const data = line.slice(6)
+              if (!data) continue
+
+              try {
+                const event = JSON.parse(data) as SSEEvent
+
+                switch (event.type) {
+                  case "thinking": {
+                    // 流式展示思考过程文本
+                    const thinkingText = `\n\n🧠 **${event.toolName}**\n${event.message}\n`
+                    pushText(thinkingText)
+                    break
+                  }
+
+                  case "result": {
+                    collectedMessages.push(event.message)
+                    // 推送结果消息内容
+                    if (event.message.content) {
+                      pushText(`\n\n${event.message.content}\n---\n`)
+                    }
+                    break
+                  }
+
+                  case "state":
+                    // 状态更新只影响进度条，不需要额外文本
+                    break
+
+                  case "done": {
+                    if (event.finalMessage && !collectedMessages.some((m) => m === event.finalMessage)) {
+                      collectedMessages.push(event.finalMessage)
+                    }
+                    break
+                  }
+
+                  case "error": {
+                    pushText(`\n\n❌ ${event.message}\n`)
+                    break
+                  }
+                }
+              } catch {
+                // skip malformed SSE data
+              }
+            }
+          }
+
+          if (started) {
+            controller.enqueue({ type: "text-end" as const, id: messageId })
+          }
+          controller.close()
+
+          // 保存收集到的消息用于后续替换
+          if (collectedMessages.length > 0) {
+            this.latestAgentMessage = collectedMessages.at(-1) ?? null
+            this.latestAgentMessages = collectedMessages
+          }
+        } catch (error) {
+          if (started) {
+            controller.enqueue({ type: "text-end" as const, id: messageId })
+          }
+          const errMsg = error instanceof Error ? error.message : "流读取失败"
+          controller.error(new AgentTransportError(errMsg, "STREAM_ERROR"))
+        }
+      },
+    })
   }
 
   async reconnectToStream() {
@@ -175,7 +329,7 @@ function createSystemError(id: string, message: string): SystemErrorMessage {
 
 function createWorkspaceMessage(message: AgentMessagePayload, index: number): WorkspaceUiMessage {
   return {
-    id: `agent-${Date.now()}-${index}`,
+    id: `agent-msg-${Date.now()}-${index}`,
     role: message.role === "system" ? "system" : "assistant",
     parts: toAiTextPart(message.content),
     metadata: message.metadata ?? { type: message.type },
@@ -225,7 +379,6 @@ export function useAgentChat({
               ? error.message
               : "未知错误"
 
-        // Inject error message into the UI message list so the user sees it
         setMessages((prev) => [
           ...prev,
           createSystemError(`err-${Date.now()}`, detail),
@@ -237,7 +390,7 @@ export function useAgentChat({
       const agentMessage = transport.getAgentMessage()
       if (!agentMessage || agentMessages.length === 0) return
 
-      // 将临时 streaming 出来的一条 assistant 消息替换为完整执行轨迹。
+      // 替换流式占位消息为独立的卡片消息
       setMessages((currentMessages) => {
         const nextMessages = [...currentMessages]
         const assistantIndex = findLastAssistantIndex(nextMessages)
@@ -248,12 +401,12 @@ export function useAgentChat({
       })
 
       // Extract preview files from build metadata
-      const files = agentMessages.flatMap((message) =>
+      const files = agentMessages.flatMap((msg) =>
         extractPreviewFiles({
           id: `agent-metadata-${Date.now()}`,
           role: "assistant",
-          parts: toAiTextPart(message.content),
-          metadata: message.metadata ?? { type: message.type },
+          parts: toAiTextPart(msg.content),
+          metadata: msg.metadata ?? { type: msg.type },
         }),
       )
       if (files.length > 0) {
@@ -264,7 +417,7 @@ export function useAgentChat({
     [sendMessage, setMessages, transport],
   )
 
-  // ---- Auto-start (fixed race condition) --------------------------------
+  // ---- Auto-start -------------------------------------------------------
   useEffect(() => {
     if (autoStarted.current || initialMessages.length > 0 || originalProblem.trim().length < 2) {
       return
@@ -291,13 +444,11 @@ export function useAgentChat({
   }, [stop])
 
   return {
-    // State
     messages,
     input,
     previewFiles,
     activePane,
     isLoading,
-    // Actions
     setInput,
     setActivePane,
     submitMessage,

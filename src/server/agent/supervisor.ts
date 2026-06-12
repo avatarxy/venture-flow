@@ -384,6 +384,183 @@ export async function handleUserMessage(
   return runAgentTurn(state, stateSaver, toolRegistry)
 }
 
+// ──── Streaming Events ────────────────────────────────────────────────
+
+export type StreamEvent =
+  | { type: "thinking"; step: number; toolName: string; message: string; plan: AgentState["currentPlan"] }
+  | { type: "state"; step: number; status: AgentState["status"]; plan: AgentState["currentPlan"] }
+  | { type: "result"; message: AgentVisibleMessage; plan: AgentState["currentPlan"] }
+  | { type: "done"; status: AgentResponse["status"]; finalMessage?: AgentVisibleMessage }
+  | { type: "error"; message: string }
+
+export type StreamEmitter = (event: StreamEvent) => void
+
+/**
+ * 流式版 Supervisor — 每一步实时推送 thinking / state / result 事件
+ */
+export async function handleUserMessageStream(
+  projectId: string,
+  userMessage: string,
+  stateLoader: (projectId: string) => Promise<AgentState>,
+  stateSaver: (state: AgentState) => Promise<void>,
+  toolRegistry: AgentToolRegistry,
+  emit: StreamEmitter,
+): Promise<void> {
+  const state = await stateLoader(projectId)
+
+  await saveChatMessage({
+    projectId,
+    role: "user",
+    type: "user-text",
+    content: userMessage,
+  })
+
+  if (state.status === "waiting_for_user") {
+    // Streaming 模式下暂不支持干预路径（退回旧逻辑）
+    const response = await handleIntervention(
+      state, userMessage, stateSaver,
+      async () => ({ type: "finish", reasoningSummary: "streaming fallback" }),
+      toolRegistry,
+    )
+    emit({ type: "result", message: response.message, plan: response.state.currentPlan })
+    emit({ type: "done", status: response.status })
+    return
+  }
+
+  await runAgentTurnStream(state, stateSaver, toolRegistry, emit)
+}
+
+async function runAgentTurnStream(
+  initialState: AgentState,
+  stateSaver: (state: AgentState) => Promise<void>,
+  toolRegistry: AgentToolRegistry,
+  emit: StreamEmitter,
+) {
+  let state: AgentState = { ...initialState, status: "executing", waitingForStep: undefined }
+
+  for (let step = 0; step < MAX_AGENT_STEPS; step += 1) {
+    const action = createPipelineAction(state)
+
+    if (!action) {
+      const isComplete = canFinish(state)
+      state = { ...state, status: isComplete ? "completed" : "waiting_for_user" }
+      await stateSaver(state)
+
+      emit({
+        type: "state",
+        step,
+        status: state.status,
+        plan: state.currentPlan,
+      })
+
+      if (isComplete) {
+        const msg: AgentVisibleMessage = {
+          role: "agent", type: "system-info",
+          content: "所有步骤已完成，项目已就绪。",
+          metadata: { agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
+        }
+        emit({ type: "result", message: msg, plan: state.currentPlan })
+        emit({ type: "done", status: "completed", finalMessage: msg })
+        return
+      }
+
+      const questionMsg: AgentVisibleMessage = {
+        role: "agent", type: "agent-question",
+        content: "已完成当前可执行步骤，但完成条件还未通过。你可以继续补充需求或让我重试。",
+        metadata: { agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
+      }
+      emit({ type: "result", message: questionMsg, plan: state.currentPlan })
+      emit({ type: "done", status: "waiting_for_user", finalMessage: questionMsg })
+      return
+    }
+
+    const budgetError = getBudgetError(action, state)
+    if (budgetError) {
+      state = { ...state, status: "failed", currentPlan: updatePlanForTool(state, action.toolName, "failed") }
+      await stateSaver(state)
+      emit({ type: "error", message: budgetError })
+      emit({ type: "done", status: "failed" })
+      return
+    }
+
+    // ── Step start: push thinking event ──
+    state = { ...state, currentPlan: updatePlanForTool(state, action.toolName, "running") }
+    emit({
+      type: "thinking",
+      step,
+      toolName: action.toolName,
+      message: action.reasoningSummary,
+      plan: state.currentPlan,
+    })
+
+    try {
+      const tool = toolRegistry.get(action.toolName)
+      const result = await tool.execute(action.arguments, state)
+
+      const record: ToolCallRecord = {
+        toolName: action.toolName,
+        reasoningSummary: action.reasoningSummary,
+        argumentsSummary: summarizeArguments(action.arguments),
+        resultSummary: result.summary,
+        status: "completed",
+        startedAt: nowIso(),
+        endedAt: nowIso(),
+        tokenUsage: 0,
+      }
+
+      const nextState = {
+        ...state,
+        ...result.statePatch,
+        ...(action.toolName === "repair_application" ? { review: undefined } : {}),
+        ...getAttemptPatch(action, state),
+        currentStep: state.currentStep + 1,
+        currentPlan: updatePlanForTool(state, action.toolName, "completed"),
+        toolCalls: [...state.toolCalls, record],
+      }
+
+      state = agentStateSchema.parse(nextState)
+      await stateSaver(state)
+
+      // ── Step complete: push result event ──
+      const resultMsg = buildAgentMessage(action.toolName, state)
+      emit({
+        type: "result",
+        message: { ...resultMsg, metadata: { ...resultMsg.metadata, agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } } },
+        plan: state.currentPlan,
+      })
+
+      emit({
+        type: "state",
+        step,
+        status: state.status,
+        plan: state.currentPlan,
+      })
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : "工具执行失败"
+      state = {
+        ...state,
+        status: "failed",
+        currentPlan: updatePlanForTool(state, action.toolName, "failed"),
+      }
+      await stateSaver(state)
+      emit({ type: "error", message: `执行 ${action.toolName} 失败: ${errMsg}` })
+      emit({ type: "done", status: "failed" })
+      return
+    }
+  }
+
+  state = { ...state, status: canFinish(state) ? "completed" : "failed" }
+  await stateSaver(state)
+  const finalMsg: AgentVisibleMessage = {
+    role: "agent",
+    type: state.status === "completed" ? "system-info" : "agent-error",
+    content: state.status === "completed" ? "任务完成。" : "已达到最大执行步数，仍未完成任务。",
+    metadata: { agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
+  }
+  emit({ type: "result", message: finalMsg, plan: state.currentPlan })
+  emit({ type: "done", status: state.status === "completed" ? "completed" : "failed", finalMessage: finalMsg })
+}
+
 /**
  * 处理用户干预指令
  * 当 Agent 处于 waiting_for_user 状态时，解析用户意图并执行对应行动

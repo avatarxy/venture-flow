@@ -31,10 +31,13 @@
   --color-background: var(--color-page);
   --color-foreground: var(--color-ink);
   --color-muted: rgba(28, 28, 28, 0.04);
-  --color-muted-foreground: var(--color-muted);
+  --color-muted-bg: rgba(28, 28, 28, 0.04);
+  --color-muted-foreground: #5f5f5d;
+  --color-surface: var(--color-page);
   --color-border: var(--color-border);
   --color-primary: var(--color-gold);
   --color-primary-foreground: var(--color-ink-light);
+  --color-ring: var(--color-ring);
   --font-sans: "Camera Plain Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }

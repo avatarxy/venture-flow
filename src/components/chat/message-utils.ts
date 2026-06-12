@@ -8,8 +8,8 @@ type TextPart = {
 export type VentureFlowUiMessage = {
   id: string
   role: string
-  content?: unknown
-  type?: unknown
+  content?: string | null
+  type?: ChatMessageType | string
   parts?: TextPart[]
   metadata?: Record<string, unknown> | null
 }

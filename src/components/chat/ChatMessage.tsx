@@ -10,6 +10,7 @@ import { MessageCard } from "./cards/MessageCard"
 import { ReviewResultCard } from "./cards/ReviewResultCard"
 import { StrategyCard } from "./cards/StrategyCard"
 import { ThinkingIndicator } from "./cards/ThinkingIndicator"
+import type { ChatMessageType } from "@/server/contracts"
 
 type ChatMessageProps = {
   message: VentureFlowUiMessage
@@ -45,14 +46,19 @@ export function ChatMessage({ message, onAction, actionDisabled }: ChatMessagePr
   }
 
   if (type === "agent-error") {
-    return <ErrorCard content={content} />
+    return (
+      <div>
+        <ErrorCard content={content} />
+        <InlineActions onAction={onAction} disabled={actionDisabled} context={type as ChatMessageType} />
+      </div>
+    )
   }
 
   if (type === "agent-strategy") {
     return (
       <div>
         <StrategyCard content={content} strategy={metadataValue(message, "strategy")} />
-        <InlineActions onAction={onAction} disabled={actionDisabled} />
+        <InlineActions onAction={onAction} disabled={actionDisabled} context={type as ChatMessageType} />
       </div>
     )
   }
@@ -61,7 +67,7 @@ export function ChatMessage({ message, onAction, actionDisabled }: ChatMessagePr
     return (
       <div>
         <BlueprintCard content={content} blueprint={metadataValue(message, "blueprint")} />
-        <InlineActions onAction={onAction} disabled={actionDisabled} />
+        <InlineActions onAction={onAction} disabled={actionDisabled} context={type as ChatMessageType} />
       </div>
     )
   }
@@ -70,7 +76,7 @@ export function ChatMessage({ message, onAction, actionDisabled }: ChatMessagePr
     return (
       <div>
         <BuildResultCard content={content} build={metadataValue(message, "build")} />
-        {extractPreviewFiles(message).length > 0 ? null : <InlineActions onAction={onAction} disabled={actionDisabled} />}
+        {extractPreviewFiles(message).length > 0 ? null : <InlineActions onAction={onAction} disabled={actionDisabled} context={type as ChatMessageType} />}
       </div>
     )
   }
@@ -79,7 +85,7 @@ export function ChatMessage({ message, onAction, actionDisabled }: ChatMessagePr
     return (
       <div>
         <ReviewResultCard content={content} review={metadataValue(message, "review")} />
-        <InlineActions onAction={onAction} disabled={actionDisabled} />
+        <InlineActions onAction={onAction} disabled={actionDisabled} context={type as ChatMessageType} />
       </div>
     )
   }
@@ -90,7 +96,7 @@ export function ChatMessage({ message, onAction, actionDisabled }: ChatMessagePr
         <MessageCard title="Agent 提问" tone="gold">
           <p className="whitespace-pre-wrap">{content}</p>
         </MessageCard>
-        <InlineActions onAction={onAction} disabled={actionDisabled} />
+        <InlineActions onAction={onAction} disabled={actionDisabled} context={type as ChatMessageType} />
       </div>
     )
   }

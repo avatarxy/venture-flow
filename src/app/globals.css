@@ -6,9 +6,17 @@
   --color-ink-light: #fcfbf8;
   --color-gold: #c88d2b;
   --color-gold-hover: #a87422;
+  --color-gold-light: rgba(200, 141, 43, 0.12);
+  --color-gold-subtle: rgba(200, 141, 43, 0.06);
   --color-muted: #5f5f5d;
   --color-border: #eceae4;
   --color-border-interactive: rgba(28, 28, 28, 0.4);
+  --color-success: #2d7d46;
+  --color-warning: #c88d2b;
+  --color-error: #c23b3b;
+  --color-info: #3b6faa;
+  --color-ring: rgba(200, 141, 43, 0.5);
+  --shadow-focus: rgba(0, 0, 0, 0.1) 0 4px 12px;
   --shadow-button-inset:
     rgba(255, 255, 255, 0.2) 0 0.5px 0 0 inset,
     rgba(0, 0, 0, 0.2) 0 0 0 0.5px inset,
@@ -23,10 +31,13 @@
   --color-background: var(--color-page);
   --color-foreground: var(--color-ink);
   --color-muted: rgba(28, 28, 28, 0.04);
-  --color-muted-foreground: var(--color-muted);
+  --color-muted-bg: rgba(28, 28, 28, 0.04);
+  --color-muted-foreground: #5f5f5d;
+  --color-surface: var(--color-page);
   --color-border: var(--color-border);
   --color-primary: var(--color-gold);
   --color-primary-foreground: var(--color-ink-light);
+  --color-ring: var(--color-ring);
   --font-sans: "Camera Plain Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }

@@ -15,9 +15,10 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.69",
+    "@ai-sdk/react": "^3.0.204",
+    "@codesandbox/sandpack-react": "^2.20.0",
     "@mastra/core": "^1.41.0",
     "@prisma/client": "^6.0.0",
-    "@codesandbox/sandpack-react": "^2.20.0",
     "@tailwindcss/postcss": "^4.3.0",
     "ai": "^6.0.201",
     "clsx": "^2.1.1",

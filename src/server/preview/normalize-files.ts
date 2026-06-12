@@ -64,10 +64,11 @@ export function normalizeSandpackFiles(
   }
 
   for (const file of files) {
+    // 跳过与 Sandpack runtime 文件冲突的路径（如 LLM 生成了 /src/main.tsx）
+    // 不可能继续抛出错误 → 沙箱将会无法渲染，且用户无法修复。
     if (runtimeFilePaths.has(file.path)) {
-      throw new Error(
-        `Generated app cannot override Sandpack runtime file: ${file.path}`,
-      )
+      // 如 /App.tsx 等入口文件仍需保留，runtime main.tsx 会 import 到它
+      continue
     }
 
     normalized[file.path] = {

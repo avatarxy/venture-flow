@@ -71,6 +71,24 @@ type SSEErrorEvent = {
 
 type SSEEvent = SSEStepEvent | SSEStateEvent | SSEResultEvent | SSEDoneEvent | SSEErrorEvent
 
+const toolNameLabels: Record<string, string> = {
+  analyze_problem: "分析业务问题",
+  inspect_capabilities: "检查能力边界",
+  create_blueprint: "生成 Product Blueprint",
+  validate_blueprint: "校验 Blueprint",
+  modify_blueprint: "修改 Blueprint",
+  generate_application: "生成 React 应用",
+  repair_application: "修复应用",
+  inspect_build: "审查应用",
+  regenerate_page: "重新生成页面",
+  optimize_product: "优化产品",
+  save_project: "保存项目",
+}
+
+function friendlyToolName(name: string) {
+  return toolNameLabels[name] ?? name
+}
+
 // ---------------------------------------------------------------------------
 // SSE Transport
 // ---------------------------------------------------------------------------
@@ -219,17 +237,16 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
 
                 switch (event.type) {
                   case "thinking": {
-                    // 流式展示思考过程文本
-                    const thinkingText = `\n\n🧠 **${event.toolName}**\n${event.message}\n`
-                    pushText(thinkingText)
+                    // 仅显示进度指示，不输出静态管道描述文本
+                    pushText(`⏳ ${friendlyToolName(event.toolName)}...\n`)
                     break
                   }
 
                   case "result": {
                     collectedMessages.push(event.message)
-                    // 推送结果消息内容
+                    // 推送实际执行结果的内容
                     if (event.message.content) {
-                      pushText(`\n\n${event.message.content}\n---\n`)
+                      pushText(`\n${event.message.content}\n`)
                     }
                     break
                   }

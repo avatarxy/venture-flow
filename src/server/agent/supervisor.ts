@@ -791,49 +791,59 @@ function buildAgentMessage(
   state: AgentState,
 ): Pick<ChatMessage, "role" | "type" | "content"> & { metadata?: Record<string, unknown> | null } {
   switch (toolName) {
-    case "analyze_problem":
+    case "analyze_problem": {
+      const s = state.strategy
+      const pains = s?.painPoints?.map((p: string) => `• ${p}`).join("\n") ?? ""
+      const outcomes = s?.desiredOutcomes?.map((o: string) => `• ${o}`).join("\n") ?? ""
+      const users = s?.targetUsers?.join("、") ?? ""
       return {
         role: "agent",
         type: "agent-strategy",
-        content: `## 业务分析完成\n\n**问题：**${state.strategy?.problemSummary ?? ""}\n**推荐方案：**${state.strategy?.recommendedAppPattern ?? ""}`,
-        metadata: { strategy: state.strategy, agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
+        content: `## 📋 业务分析结果\n\n**核心问题**\n${s?.problemSummary ?? ""}\n\n**目标用户**\n${users}\n\n**痛点**\n${pains}\n\n**期望结果**\n${outcomes}\n\n**推荐应用模式**\n${s?.recommendedAppPattern ?? ""}`,
+        metadata: { strategy: s, agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
       }
+    }
 
     case "create_blueprint":
     case "modify_blueprint": {
-      const entityList = state.blueprint?.entities?.map((e: { label: string }) => e.label).join("、") ?? ""
-      const entityCount = state.blueprint?.entities?.length ?? 0
-      const pageCount = state.blueprint?.pages?.length ?? 0
+      const b = state.blueprint
+      const entityLines = b?.entities?.map((e: { label: string; description?: string; fields?: Array<{ label: string; type: string }> }) =>
+        `• **${e.label}** — ${(e.fields ?? []).map((f: { label: string }) => f.label).join("、")}`
+      ).join("\n") ?? ""
+      const pageLines = b?.pages?.map((p: { name: string; purpose: string }) => `• **${p.name}** — ${p.purpose}`).join("\n") ?? ""
+      const wfNames = b?.workflows?.map((w: { title: string }) => w.title).join("、") ?? ""
       return {
         role: "agent",
         type: "agent-blueprint",
-        content: `## Product Blueprint\n\n**实体：**${entityList}（${entityCount}/4个）\n**页面：**${pageCount}/5个\n**类型：**${state.blueprint?.appPattern ?? ""}`,
-        metadata: { blueprint: state.blueprint, agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
+        content: `## 🏗️ Product Blueprint\n\n**应用类型**\n${b?.appPattern ?? ""}\n\n**数据实体**\n${entityLines}\n\n**页面规划**\n${pageLines}\n\n**核心流程**\n${wfNames}`,
+        metadata: { blueprint: b, agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
       }
     }
 
     case "generate_application":
-    case "regenerate_page":
+    case "regenerate_page": {
+      const fileList = state.build?.files?.map((f: { path: string }) => `• ${f.path}`).join("\n") ?? ""
       return {
         role: "agent",
         type: "agent-build",
-        content: `## 应用已生成\n\n已生成 ${state.build?.files?.length ?? 0} 个文件，可在右侧面板预览。`,
+        content: `## 🎨 应用生成完成\n\n已生成 ${state.build?.files?.length ?? 0} 个文件，右侧面板可预览：\n\n${fileList}`,
         metadata: { build: state.build, agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
       }
+    }
 
     case "inspect_build":
       if (state.review?.passed) {
         return {
           role: "agent",
           type: "agent-review",
-          content: "## ✅ 审查通过\n\n应用满足所有安全边界和功能要求。",
+          content: "## ✅ 代码审查通过\n\n应用满足安全边界和功能完整性要求，可直接使用。",
           metadata: { review: state.review, agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
         }
       }
       return {
         role: "agent",
         type: "agent-review",
-        content: `## ⚠️ 审查发现问题\n\n${state.review?.issues?.map((i: { message: string }) => `- ${i.message}`).join("\n") ?? ""}`,
+        content: `## ⚠️ 审查发现问题\n\n${state.review?.issues?.map((i: { message: string; severity?: string }) => `• [${i.severity ?? "warning"}] ${i.message}`).join("\n") ?? ""}`,
         metadata: { review: state.review, agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
       }
 
@@ -841,7 +851,7 @@ function buildAgentMessage(
       return {
         role: "agent",
         type: "agent-build",
-        content: "## 应用已修复\n\n已根据审查结果修复问题。",
+        content: `## 🔧 应用已修复\n\n${state.build?.files?.length ?? 0} 个文件已更新，右侧面板已同步最新版本。`,
         metadata: { build: state.build, agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
       }
 
@@ -849,7 +859,7 @@ function buildAgentMessage(
       return {
         role: "agent",
         type: "system-info",
-        content: `## 优化建议\n\n已生成 ${state.optimization?.recommendations?.length ?? 0} 条优化建议。`,
+        content: `## 💡 优化建议\n\n${state.optimization?.recommendations?.map((r: { title: string; description: string }) => `• **${r.title}** — ${r.description}`).join("\n") ?? "暂无优化建议"}`,
         metadata: { optimization: state.optimization, agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
       }
 

@@ -2,6 +2,7 @@ import { agentActionSchema, agentStateSchema } from "@/server/contracts"
 import type { AgentAction, AgentState, ToolCallRecord, ToolName } from "@/server/contracts"
 import type { ChatMessage } from "@/server/contracts/chat-message"
 import type { UserIntent } from "@/server/contracts/user-intent"
+import type { JsonValue } from "@/server/contracts/json"
 import { parseUserIntent } from "./user-intent"
 import { canFinish, canFinishByUserAccept } from "./can-finish"
 import { MAX_AGENT_STEPS, MAX_BUILD_ATTEMPTS, MAX_REPAIR_ATTEMPTS } from "./constants"
@@ -44,6 +45,45 @@ function createFailureRecord(input: {
     errorMessage: input.errorMessage,
     tokenUsage: 0,
   }
+}
+
+function toolDetailForIntent(intent: UserIntent): string {
+  switch (intent.type) {
+    case "modify_blueprint": return intent.instruction ?? "根据反馈修改 Blueprint"
+    case "redo_blueprint": return "重新生成 Blueprint"
+    case "regenerate_page": return `重新生成页面 ${intent.targetPage ?? ""}`
+    default: return ""
+  }
+}
+
+function intentToToolAction(
+  intent: UserIntent,
+  state: AgentState,
+): ToolAction | null {
+  switch (intent.type) {
+    case "modify_blueprint":
+      return {
+        type: "tool",
+        toolName: "modify_blueprint",
+        reasoningSummary: "根据用户反馈修改 Blueprint",
+        arguments: { blueprint: state.blueprint as unknown as JsonValue, instruction: intent.instruction as JsonValue },
+      }
+    case "redo_blueprint":
+      return {
+        type: "tool",
+        toolName: "create_blueprint",
+        reasoningSummary: "重新生成 Blueprint",
+        arguments: { originalProblem: state.originalProblem as JsonValue, strategy: state.strategy as unknown as JsonValue },
+      }
+    case "regenerate_page":
+      return {
+        type: "tool",
+        toolName: "regenerate_page",
+        reasoningSummary: `根据用户反馈重新生成 ${intent.targetPage ?? "目标页面"}`,
+        arguments: { blueprint: state.blueprint as unknown as JsonValue, build: state.build as unknown as JsonValue, targetPage: intent.targetPage as JsonValue, instruction: intent.instruction as JsonValue },
+      }
+  }
+  return null
 }
 
 function getAttemptPatch(action: ToolAction, state: AgentState): Pick<AgentState, "buildAttempts" | "repairAttempts"> {
@@ -425,7 +465,7 @@ export async function handleUserMessageStream(
   toolRegistry: AgentToolRegistry,
   emit: StreamEmitter,
 ): Promise<void> {
-  const state = await stateLoader(projectId)
+  let state = await stateLoader(projectId)
 
   await saveChatMessage({
     projectId,
@@ -435,14 +475,62 @@ export async function handleUserMessageStream(
   })
 
   if (state.status === "waiting_for_user") {
-    // Streaming 模式下暂不支持干预路径（退回旧逻辑）
-    const response = await handleIntervention(
-      state, userMessage, stateSaver,
-      async () => ({ type: "finish", reasoningSummary: "streaming fallback" }),
-      toolRegistry,
-    )
-    emit({ type: "result", message: response.message, plan: response.state.currentPlan })
-    emit({ type: "done", status: response.status })
+    const intent = await parseUserIntent(userMessage, { status: state.status })
+
+    // continue / skip_to_build → 恢复自主管道流式执行
+    if (intent.type === "continue" || intent.type === "skip_to_build") {
+      state = { ...state, status: "executing", waitingForStep: undefined }
+      await stateSaver(state)
+      await runAgentTurnStream(state, stateSaver, toolRegistry, emit)
+      return
+    }
+
+    // modify_blueprint / redo_blueprint / regenerate_page → 单步工具执行
+    if (intent.type === "modify_blueprint" || intent.type === "redo_blueprint" || intent.type === "regenerate_page") {
+      const toolAction = intentToToolAction(intent, state)
+      if (toolAction) {
+        emit({
+          type: "thinking",
+          step: state.currentStep,
+          toolName: toolAction.toolName,
+          message: toolDetailForIntent(intent),
+          plan: state.currentPlan,
+        })
+
+        try {
+          const tool = toolRegistry.get(toolAction.toolName)
+          const result = await tool.execute(toolAction.arguments, state)
+          state = { ...state, ...result.statePatch, status: "waiting_for_user", waitingForStep: toolAction.toolName }
+          await stateSaver(state)
+          emit({ type: "result", message: buildAgentMessage(toolAction.toolName, state), plan: state.currentPlan })
+          emit({ type: "done", status: "waiting_for_user" })
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : "工具执行失败"
+          emit({ type: "error", message: errMsg })
+          emit({ type: "done", status: "failed" })
+        }
+        return
+      }
+    }
+
+    // accept
+    if (intent.type === "accept" && canFinishByUserAccept(state)) {
+      state = { ...state, status: "completed" }
+      await stateSaver(state)
+      const msg: AgentVisibleMessage = { role: "agent", type: "system-info", content: "好的，项目已完成。" }
+      emit({ type: "result", message: msg, plan: state.currentPlan })
+      emit({ type: "done", status: "completed", finalMessage: msg })
+      return
+    }
+
+    // unknown — 提问让用户澄清
+    const questionMsg: AgentVisibleMessage = {
+      role: "agent",
+      type: "agent-question",
+      content: "我不太确定你的意思。你可以试试说「继续」、「修改 Blueprint」、「直接生成应用」或者「就这样吧」。",
+    }
+    emit({ type: "result", message: questionMsg, plan: state.currentPlan })
+    emit({ type: "done", status: "waiting_for_user", finalMessage: questionMsg })
     return
   }
 

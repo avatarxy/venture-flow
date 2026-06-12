@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { createProject } from "@/server/projects/project-repository"
+import { createProject, listProjects } from "@/server/projects/project-repository"
+
+export async function GET() {
+  const projects = await listProjects()
+  return NextResponse.json({ projects })
+}
 
 export async function POST(request: Request) {
   let body: unknown

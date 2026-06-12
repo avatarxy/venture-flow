@@ -1,5 +1,5 @@
 import { Boxes, ChartNoAxesCombined, ShieldCheck } from "lucide-react"
-import { CreateProjectForm } from "@/components/projects/CreateProjectForm"
+import { HomeHero } from "@/components/home/HomeHero"
 
 const capabilities = [
   {
@@ -21,33 +21,8 @@ const capabilities = [
 
 export default function HomePage() {
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-57px)] max-w-6xl flex-col gap-8 px-6 py-8 md:py-12">
-      <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
-        <div className="space-y-6">
-          <div className="inline-flex rounded-full border border-[var(--color-border-interactive)] px-3 py-1 text-xs text-muted-foreground">
-            Problem-first AI solution builder
-          </div>
-          <div className="max-w-3xl space-y-4">
-            <h1 className="text-5xl font-semibold leading-[1.05] md:text-6xl">VentureFlow</h1>
-            <p className="max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
-              从业务问题出发，生成可运行、可分析、可迭代的业务应用。
-            </p>
-          </div>
-          <CreateProjectForm />
-          <p className="text-sm text-muted-foreground">试试：销售团队在用 Excel 管理客户，经常漏跟线索。</p>
-        </div>
-        <div className="border border-border bg-[rgba(252,251,248,0.55)] p-5 [border-radius:8px]">
-          <div className="space-y-4">
-            <p className="text-sm font-semibold">MVP Flow</p>
-            <ol className="space-y-3 text-sm text-muted-foreground">
-              <li>1. 输入业务问题</li>
-              <li>2. Agent 生成策略分析与产品蓝图</li>
-              <li>3. Sandpack 运行 React App</li>
-              <li>4. Usage Analytics 驱动改进版本</li>
-            </ol>
-          </div>
-        </div>
-      </section>
+    <main className="mx-auto flex min-h-[calc(100vh-61px)] max-w-6xl flex-col gap-8 px-6 py-8 md:py-12">
+      <HomeHero />
 
       <section className="grid gap-3 md:grid-cols-3">
         {capabilities.map((capability) => {

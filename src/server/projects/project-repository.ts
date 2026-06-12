@@ -40,6 +40,19 @@ function shouldUseDemoProject(projectId: string) {
   return process.env.VENTUREFLOW_ENABLE_DEMO_PROJECT === "1" && projectId === "demo-project"
 }
 
+export async function listProjects() {
+  return prisma.project.findMany({
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      originalProblem: true,
+      updatedAt: true,
+    },
+  })
+}
+
 export async function getProject(projectId: string) {
   if (shouldUseDemoProject(projectId)) {
     return {

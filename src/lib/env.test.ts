@@ -11,7 +11,7 @@ describe("parseServerEnv", () => {
 
     expect(result.NEXT_PUBLIC_APP_URL).toBe("http://localhost:3000")
     expect(result.AI_BASE_URL).toBe("https://generativelanguage.googleapis.com/v1beta")
-    expect(result.AI_MODEL).toBe("gemma-4-26b")
+    expect(result.AI_MODEL).toBe("gemma-4-26b-a4b-it")
   })
 
   it("accepts custom Gemini model configuration", () => {

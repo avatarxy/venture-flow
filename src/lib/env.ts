@@ -4,7 +4,7 @@ const serverEnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   GEMINI_API_KEY: z.string().min(1),
   AI_BASE_URL: z.string().url().default("https://generativelanguage.googleapis.com/v1beta"),
-  AI_MODEL: z.string().min(1).default("gemma-4-26b"),
+  AI_MODEL: z.string().min(1).default("gemma-4-26b-a4b-it"),
   NEXT_PUBLIC_APP_URL: z.url(),
 })
 

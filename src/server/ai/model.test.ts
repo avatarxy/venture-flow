@@ -12,7 +12,7 @@ describe("getAiModelConfig", () => {
     expect(config).toEqual({
       apiKey: "test-key",
       baseURL: "https://generativelanguage.googleapis.com/v1beta",
-      model: "gemma-4-26b",
+      model: "gemma-4-26b-a4b-it",
     })
   })
 

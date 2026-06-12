@@ -52,4 +52,40 @@ describe("generateApplication", () => {
       }),
     )
   })
+
+  it("removes invisible control characters that break Sandpack parsing", async () => {
+    mockedGenerateStructuredObject.mockResolvedValueOnce({
+      summary: "生成销售管理应用",
+      files: [
+        {
+          path: "/App.tsx",
+          content: "\u0000export default function App() { localStorage.setItem('vf-generated-demo', '1'); return null }\u0000",
+        },
+      ],
+    })
+
+    const result = await generateApplication(validBlueprint)
+
+    expect(result.files[0]?.content).not.toContain("\u0000")
+    expect(result.files[0]?.content).toContain("localStorage.setItem")
+    expect(result.files[0]?.content).toContain("\n  return null;")
+  })
+
+  it("formats generated TSX files before they are shown in the code editor", async () => {
+    mockedGenerateStructuredObject.mockResolvedValueOnce({
+      summary: "生成销售管理应用",
+      files: [
+        {
+          path: "/App.tsx",
+          content: "export default function App(){return <main><button onClick={()=>localStorage.setItem('vf-generated-demo','1')}>新增</button></main>}",
+        },
+      ],
+    })
+
+    const result = await generateApplication(validBlueprint)
+
+    expect(result.files[0]?.content).toContain("export default function App()")
+    expect(result.files[0]?.content).toContain("\n  return (")
+    expect(result.files[0]?.content).toContain("\n    <main>")
+  })
 })

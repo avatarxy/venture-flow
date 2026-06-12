@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client"
 import { Prisma as PrismaRuntime } from "@prisma/client"
+import { buildOutputSchema } from "@/server/contracts"
 import { prisma } from "@/server/db/client"
+import { prepareGeneratedBuild } from "@/server/tools/format-generated-build"
 
 export type GeneratedVersionFile = {
   path: string
@@ -20,6 +22,7 @@ export async function createGeneratedVersion(input: {
   files: GeneratedVersionFile[]
   blueprintSnapshot: Prisma.InputJsonValue
   changeSummary: string
+  publishStatus?: "DRAFT" | "LIVE" | "FAILED"
 }) {
   let lastError: unknown
 
@@ -41,6 +44,7 @@ export async function createGeneratedVersion(input: {
               files: input.files,
               blueprintSnapshot: input.blueprintSnapshot,
               changeSummary: input.changeSummary,
+              publishStatus: input.publishStatus ?? "DRAFT",
             },
           })
 
@@ -67,4 +71,25 @@ export async function createGeneratedVersion(input: {
   }
 
   throw lastError
+}
+
+export async function publishCurrentBuildPreview(projectId: string) {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: { agentState: true },
+  })
+
+  if (!project?.agentState?.build) {
+    throw new Error("当前项目还没有可发布的生成应用")
+  }
+
+  const build = await prepareGeneratedBuild(buildOutputSchema.parse(project.agentState.build))
+
+  return createGeneratedVersion({
+    projectId,
+    files: build.files,
+    blueprintSnapshot: (project.agentState.blueprint ?? {}) as Prisma.InputJsonValue,
+    changeSummary: "发布在线预览",
+    publishStatus: "LIVE",
+  })
 }

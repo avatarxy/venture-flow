@@ -3,6 +3,7 @@ import { z } from "zod"
 import type { BuildOutput, ReviewResult } from "@/server/contracts"
 import { generatedFileSchema, reviewResultSchema } from "@/server/contracts"
 import { capabilityLimits } from "./inspect-capabilities"
+import { hasDisallowedControlCharacters } from "./generated-file-quality"
 
 export const buildInspectionInputSchema = z.object({
   summary: z.string().min(1),
@@ -134,6 +135,10 @@ export function inspectBuild(build: z.infer<typeof buildInspectionInputSchema> |
   const appFile = parsedBuild.files.find((file) => file.path === "/App.tsx")
 
   for (const file of parsedBuild.files) {
+    if (hasDisallowedControlCharacters(file.content)) {
+      issues.push({ type: "missing_feature", message: `${file.path} 包含 Sandpack 无法解析的不可见控制字符`, severity: "high" })
+    }
+
     // 基于白名单的 import 校验
     const forbiddenModules = findForbiddenImports(file.content)
     for (const moduleName of forbiddenModules) {

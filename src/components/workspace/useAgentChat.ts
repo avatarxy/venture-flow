@@ -243,7 +243,16 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
                   }
 
                   case "error": {
-                    pushText(`❌ ${event.message}\n`)
+                    const errorMessage: AgentMessagePayload = {
+                      role: "agent",
+                      type: "agent-error",
+                      content: event.message,
+                      metadata: { error: true },
+                    }
+                    this.latestAgentMessages.push(errorMessage)
+                    if (this.onCardCallback) {
+                      this.onCardCallback(errorMessage)
+                    }
                     break
                   }
                 }
@@ -295,6 +304,59 @@ function findLastAssistantIndex(messages: WorkspaceUiMessage[]) {
     if (messages[i]?.role === "assistant") return i
   }
   return -1
+}
+
+function hasVentureFlowMessageType(message: WorkspaceUiMessage) {
+  return Boolean(
+    message.metadata &&
+      typeof message.metadata === "object" &&
+      !Array.isArray(message.metadata) &&
+      typeof (message.metadata as { type?: unknown }).type === "string",
+  )
+}
+
+export function findStreamingAssistantIndex(messages: WorkspaceUiMessage[]) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (!message || message.role !== "assistant") continue
+    if (hasVentureFlowMessageType(message)) continue
+
+    const text = getMessageText(message).trim()
+    if (text.startsWith("⏳")) {
+      return i
+    }
+  }
+
+  return -1
+}
+
+export function appendAgentCardMessage(messages: WorkspaceUiMessage[], card: WorkspaceUiMessage) {
+  if (messages.some((message) => message.id === card.id)) {
+    return messages
+  }
+
+  const streamingIdx = findStreamingAssistantIndex(messages)
+  if (streamingIdx === -1) {
+    return [...messages, card]
+  }
+
+  return [
+    ...messages.slice(0, streamingIdx),
+    card,
+    ...messages.slice(streamingIdx),
+  ]
+}
+
+export function removeStreamingAssistantMessage(messages: WorkspaceUiMessage[]) {
+  const streamingIdx = findStreamingAssistantIndex(messages)
+  if (streamingIdx === -1) {
+    return messages
+  }
+
+  return [
+    ...messages.slice(0, streamingIdx),
+    ...messages.slice(streamingIdx + 1),
+  ]
 }
 
 function createSystemError(id: string, message: string): SystemErrorMessage {
@@ -364,11 +426,7 @@ export function useAgentChat({
 
         // 将卡片即时插入到流式消息之前
         setMessages((prev) => {
-          const streamingIdx = findLastAssistantIndex(prev)
-          if (streamingIdx === -1) return prev as WorkspaceUiMessage[]
-          const before = prev.slice(0, streamingIdx)
-          const after = prev.slice(streamingIdx) // 流式消息保持在末尾
-          return [...before, ...pendingCards.current, ...after] as WorkspaceUiMessage[]
+          return appendAgentCardMessage(prev as WorkspaceUiMessage[], card) as WorkspaceUiMessage[]
         })
       })
 
@@ -387,11 +445,11 @@ export function useAgentChat({
 
       // 流式结束 → 移除以"⏳"开头的流式占位消息
       setMessages((prev) => {
-        const streamingIdx = findLastAssistantIndex(prev)
-        if (streamingIdx === -1) return prev as WorkspaceUiMessage[]
-        const before = prev.slice(0, streamingIdx)
-        const after = prev.slice(streamingIdx + 1)
-        return [...before, ...after] as WorkspaceUiMessage[]
+        const withCards = pendingCards.current.reduce(
+          (nextMessages, card) => appendAgentCardMessage(nextMessages, card),
+          prev as WorkspaceUiMessage[],
+        )
+        return removeStreamingAssistantMessage(withCards) as WorkspaceUiMessage[]
       })
 
       // Extract preview files

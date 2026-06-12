@@ -87,7 +87,7 @@ export function ProjectWorkspace({
         <section
           className={`${activePane === "preview" ? "block" : "hidden"} h-full min-h-0 border-l border-border bg-[rgba(252,251,248,0.36)] lg:block`}
         >
-          <PreviewPanel files={previewFiles} />
+          <PreviewPanel projectId={projectId} files={previewFiles} />
         </section>
       </div>
     </main>

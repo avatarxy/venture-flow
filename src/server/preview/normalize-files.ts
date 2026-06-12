@@ -1,4 +1,5 @@
 import type { GeneratedFile } from "@/server/contracts"
+import { sanitizeGeneratedFileContent } from "@/server/tools/generated-file-quality"
 
 type SandpackFile = {
   code: string
@@ -13,20 +14,30 @@ const packageJson = {
     start: "vite --host 0.0.0.0",
   },
   dependencies: {
-    "@vitejs/plugin-react": "latest",
-    vite: "latest",
-    typescript: "latest",
-    react: "latest",
-    "react-dom": "latest",
-    "lucide-react": "latest",
-    recharts: "latest",
+    "@vitejs/plugin-react": "4.3.4",
+    vite: "5.4.21",
+    typescript: "5.7.3",
+    react: "18.2.0",
+    "react-dom": "18.2.0",
+    "lucide-react": "0.468.0",
+    recharts: "2.13.3",
   },
   devDependencies: {},
 }
 
-const runtimeFilePaths = new Set(["/package.json", "/index.html", "/src/main.tsx"])
+const runtimeFilePaths = new Set([
+  "/package.json",
+  "/index.html",
+  "/src/main.tsx",
+])
 
-export function normalizeSandpackFiles(files: GeneratedFile[]): NormalizedSandpackFiles {
+export function getVisibleGeneratedFilePaths(files: GeneratedFile[]) {
+  return Array.from(new Set(files.map((file) => file.path)))
+}
+
+export function normalizeSandpackFiles(
+  files: GeneratedFile[],
+): NormalizedSandpackFiles {
   const normalized: NormalizedSandpackFiles = {
     "/package.json": {
       code: JSON.stringify(packageJson, null, 2),
@@ -54,11 +65,13 @@ export function normalizeSandpackFiles(files: GeneratedFile[]): NormalizedSandpa
 
   for (const file of files) {
     if (runtimeFilePaths.has(file.path)) {
-      throw new Error(`Generated app cannot override Sandpack runtime file: ${file.path}`)
+      throw new Error(
+        `Generated app cannot override Sandpack runtime file: ${file.path}`,
+      )
     }
 
     normalized[file.path] = {
-      code: file.content,
+      code: sanitizeGeneratedFileContent(file.content),
       active: file.path === "/App.tsx",
     }
   }

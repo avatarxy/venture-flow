@@ -52,7 +52,58 @@ function toolDetailForIntent(intent: UserIntent): string {
     case "modify_blueprint": return intent.instruction ?? "根据反馈修改 Blueprint"
     case "redo_blueprint": return "重新生成 Blueprint"
     case "regenerate_page": return `重新生成页面 ${intent.targetPage ?? ""}`
+    case "repair_application": return "根据用户反馈修复应用错误"
     default: return ""
+  }
+}
+
+function createUserReportedReview(instruction: string) {
+  return {
+    passed: false,
+    issues: [{
+      type: "compile_error" as const,
+      message: instruction,
+      severity: "high" as const,
+    }],
+    recommendedFix: "根据用户粘贴的报错信息修复生成应用，并保留已有有效功能。",
+  }
+}
+
+function createIntentContext(state: AgentState) {
+  return {
+    status: state.status,
+    currentStep: state.currentStep,
+    waitingForStep: state.waitingForStep,
+    hasStrategy: Boolean(state.strategy),
+    hasBlueprint: Boolean(state.blueprint),
+    hasBuild: Boolean(state.build),
+    hasReview: Boolean(state.review),
+  }
+}
+
+function shouldHandleUserIntervention(state: AgentState) {
+  if (state.status === "waiting_for_user") return true
+  if (!state.build) return false
+
+  return state.status === "completed" || state.status === "failed" || state.status === "stopped"
+}
+
+function createClarificationResponse(state: AgentState): AgentResponse {
+  const content = state.build
+    ? "我不太确定你的意思。你可以直接粘贴预览/控制台报错，或说明要新增页面、功能、字段，或修改某段文案。"
+    : "我不太确定你的意思。你可以试试说「继续」、「修改 Blueprint」、「直接生成应用」或者「就这样吧」。"
+
+  const message: AgentVisibleMessage = {
+    role: "agent",
+    type: "agent-question",
+    content,
+  }
+
+  return {
+    state,
+    messages: [message],
+    message,
+    status: "waiting_for_user",
   }
 }
 
@@ -82,6 +133,21 @@ function intentToToolAction(
         reasoningSummary: `根据用户反馈重新生成 ${intent.targetPage ?? "目标页面"}`,
         arguments: { blueprint: state.blueprint as unknown as JsonValue, build: state.build as unknown as JsonValue, targetPage: intent.targetPage as JsonValue, instruction: intent.instruction as JsonValue },
       }
+    case "repair_application":
+      return {
+        type: "tool",
+        toolName: "repair_application",
+        reasoningSummary: "根据用户粘贴的报错信息修复生成应用",
+        arguments: {
+          blueprint: state.blueprint as unknown as JsonValue,
+          build: state.build as unknown as JsonValue,
+          review: (
+            state.review && !state.review.passed
+              ? state.review
+              : createUserReportedReview(intent.instruction)
+          ) as unknown as JsonValue,
+        },
+      }
   }
   return null
 }
@@ -93,12 +159,12 @@ function getAttemptPatch(action: ToolAction, state: AgentState): Pick<AgentState
   }
 }
 
-function getBudgetError(action: ToolAction, state: AgentState) {
+function getBudgetError(action: ToolAction, state: AgentState, input: { userInitiated?: boolean } = {}) {
   if (action.toolName === "generate_application" && state.buildAttempts >= MAX_BUILD_ATTEMPTS) {
     return "应用生成次数已达到上限"
   }
 
-  if (action.toolName === "repair_application" && state.repairAttempts >= MAX_REPAIR_ATTEMPTS) {
+  if (!input.userInitiated && action.toolName === "repair_application" && state.repairAttempts >= MAX_REPAIR_ATTEMPTS) {
     return "应用修复次数已达到上限"
   }
 
@@ -434,8 +500,8 @@ export async function handleUserMessage(
     content: userMessage,
   })
 
-  // 如果 Agent 正在等待用户反馈，处理干预
-  if (state.status === "waiting_for_user") {
+  // 如果 Agent 正在等待用户反馈，或用户在已生成应用后继续反馈，处理干预
+  if (shouldHandleUserIntervention(state)) {
     return handleIntervention(state, userMessage, stateSaver, decideFn, toolRegistry)
   }
 
@@ -474,8 +540,8 @@ export async function handleUserMessageStream(
     content: userMessage,
   })
 
-  if (state.status === "waiting_for_user") {
-    const intent = await parseUserIntent(userMessage, { status: state.status })
+  if (shouldHandleUserIntervention(state)) {
+    const intent = await parseUserIntent(userMessage, createIntentContext(state))
 
     // continue / skip_to_build → 恢复自主管道流式执行
     if (intent.type === "continue" || intent.type === "skip_to_build") {
@@ -485,10 +551,22 @@ export async function handleUserMessageStream(
       return
     }
 
-    // modify_blueprint / redo_blueprint / regenerate_page → 单步工具执行
-    if (intent.type === "modify_blueprint" || intent.type === "redo_blueprint" || intent.type === "regenerate_page") {
+    // modify_blueprint / redo_blueprint / regenerate_page / repair_application → 单步工具执行
+    if (
+      intent.type === "modify_blueprint" ||
+      intent.type === "redo_blueprint" ||
+      intent.type === "regenerate_page" ||
+      intent.type === "repair_application"
+    ) {
       const toolAction = intentToToolAction(intent, state)
       if (toolAction) {
+        const budgetError = getBudgetError(toolAction, state, { userInitiated: true })
+        if (budgetError) {
+          emit({ type: "error", message: budgetError })
+          emit({ type: "done", status: "failed" })
+          return
+        }
+
         emit({
           type: "thinking",
           step: state.currentStep,
@@ -500,7 +578,14 @@ export async function handleUserMessageStream(
         try {
           const tool = toolRegistry.get(toolAction.toolName)
           const result = await tool.execute(toolAction.arguments, state)
-          state = { ...state, ...result.statePatch, status: "waiting_for_user", waitingForStep: toolAction.toolName }
+          state = {
+            ...state,
+            ...result.statePatch,
+            ...(toolAction.toolName === "repair_application" ? { review: undefined } : {}),
+            ...getAttemptPatch(toolAction, state),
+            status: "waiting_for_user",
+            waitingForStep: toolAction.toolName,
+          }
           await stateSaver(state)
           emit({ type: "result", message: buildAgentMessage(toolAction.toolName, state), plan: state.currentPlan })
           emit({ type: "done", status: "waiting_for_user" })
@@ -527,7 +612,9 @@ export async function handleUserMessageStream(
     const questionMsg: AgentVisibleMessage = {
       role: "agent",
       type: "agent-question",
-      content: "我不太确定你的意思。你可以试试说「继续」、「修改 Blueprint」、「直接生成应用」或者「就这样吧」。",
+      content: state.build
+        ? "我不太确定你的意思。你可以直接粘贴预览/控制台报错，或说明要新增页面、功能、字段，或修改某段文案。"
+        : "我不太确定你的意思。你可以试试说「继续」、「修改 Blueprint」、「直接生成应用」或者「就这样吧」。",
     }
     emit({ type: "result", message: questionMsg, plan: state.currentPlan })
     emit({ type: "done", status: "waiting_for_user", finalMessage: questionMsg })
@@ -680,7 +767,7 @@ async function handleIntervention(
   decideFn: (state: AgentState) => Promise<unknown>,
   toolRegistry: AgentToolRegistry,
 ): Promise<AgentResponse> {
-  const intent = await parseUserIntent(userMessage, { status: state.status })
+  const intent = await parseUserIntent(userMessage, createIntentContext(state))
 
   switch (intent.type) {
     case "continue":
@@ -688,33 +775,28 @@ async function handleIntervention(
       return runAgentTurn(state, stateSaver, toolRegistry)
 
     case "modify_blueprint":
-      return executeInterventionTool(state, {
-        toolName: "modify_blueprint",
-        arguments: {
-          blueprint: state.blueprint,
-          instruction: intent.instruction,
-        },
-      }, stateSaver, toolRegistry)
-
     case "redo_blueprint":
-      return executeInterventionTool(state, {
-        toolName: "create_blueprint",
-        arguments: {
-          originalProblem: state.originalProblem,
-          strategy: state.strategy,
-        },
-      }, stateSaver, toolRegistry)
-
     case "regenerate_page":
-      return executeInterventionTool(state, {
-        toolName: "regenerate_page",
-        arguments: {
-          blueprint: state.blueprint,
-          build: state.build,
-          targetPage: intent.targetPage,
-          instruction: intent.instruction,
-        },
-      }, stateSaver, toolRegistry)
+    case "repair_application": {
+      const toolAction = intentToToolAction(intent, state)
+      if (!toolAction) {
+        return {
+          state,
+          messages: [{
+            role: "agent",
+            type: "agent-question",
+            content: "我理解你想调整当前结果，但还缺少可执行上下文。请先生成 Blueprint 或应用后再继续修改。",
+          }],
+          message: {
+            role: "agent",
+            type: "agent-question",
+            content: "我理解你想调整当前结果，但还缺少可执行上下文。请先生成 Blueprint 或应用后再继续修改。",
+          },
+          status: "waiting_for_user",
+        }
+      }
+      return executeInterventionTool(state, toolAction, stateSaver, toolRegistry)
+    }
 
     case "skip_to_build": {
       // 用户希望加速时仍然必须补齐 Strategy/Blueprint 等前置契约。
@@ -736,20 +818,7 @@ async function handleIntervention(
       return runAgentTurn({ ...state, status: "executing", waitingForStep: undefined }, stateSaver, toolRegistry)
 
     default:
-      return {
-        state,
-        messages: [{
-          role: "agent",
-          type: "agent-question",
-          content: "我不太确定你的意思。你可以试试说「继续」、「修改 Blueprint」、「直接生成应用」或者「就这样吧」。",
-        }],
-        message: {
-          role: "agent",
-          type: "agent-question",
-          content: "我不太确定你的意思。你可以试试说「继续」、「修改 Blueprint」、「直接生成应用」或者「就这样吧」。",
-        },
-        status: "waiting_for_user",
-      }
+      return createClarificationResponse(state)
   }
 }
 
@@ -865,15 +934,44 @@ async function runAgentTurn(
  */
 async function executeInterventionTool(
   state: AgentState,
-  action: { toolName: string; arguments: Record<string, unknown> },
+  action: ToolAction,
   stateSaver: (state: AgentState) => Promise<void>,
   toolRegistry: AgentToolRegistry,
 ): Promise<AgentResponse> {
+  const budgetError = getBudgetError(action, state, { userInitiated: true })
+  if (budgetError) {
+    const message: AgentVisibleMessage = { role: "agent", type: "agent-error", content: budgetError }
+    return {
+      state,
+      message,
+      messages: [message],
+      status: "waiting_for_user",
+    }
+  }
+
+  const startedAt = nowIso()
   try {
-    const tool = toolRegistry.get(action.toolName as ToolName)
+    const tool = toolRegistry.get(action.toolName)
     const result = await tool.execute(action.arguments as never, state)
 
-    state = { ...state, ...result.statePatch }
+    const record: ToolCallRecord = {
+      toolName: action.toolName,
+      reasoningSummary: action.reasoningSummary,
+      argumentsSummary: summarizeArguments(action.arguments),
+      resultSummary: result.summary,
+      status: "completed",
+      startedAt,
+      endedAt: nowIso(),
+      tokenUsage: 0,
+    }
+
+    state = {
+      ...state,
+      ...result.statePatch,
+      ...(action.toolName === "repair_application" ? { review: undefined } : {}),
+      ...getAttemptPatch(action, state),
+      toolCalls: [...state.toolCalls, record],
+    }
     const message = buildAgentMessage(action.toolName, state)
 
     state = { ...state, status: "waiting_for_user", waitingForStep: action.toolName }
@@ -881,6 +979,19 @@ async function executeInterventionTool(
     return { state, message, messages: [message], status: "waiting_for_user" }
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "工具执行失败"
+    const record: ToolCallRecord = {
+      toolName: action.toolName,
+      reasoningSummary: action.reasoningSummary,
+      argumentsSummary: summarizeArguments(action.arguments),
+      resultSummary: "工具执行失败",
+      status: "failed",
+      startedAt,
+      endedAt: nowIso(),
+      errorMessage: errMsg,
+      tokenUsage: 0,
+    }
+    state = { ...state, toolCalls: [...state.toolCalls, record] }
+    await stateSaver(state)
     const message: AgentVisibleMessage = { role: "agent", type: "agent-error", content: `执行失败: ${errMsg}` }
     return {
       state,

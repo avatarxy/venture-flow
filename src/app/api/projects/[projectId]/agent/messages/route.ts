@@ -17,6 +17,14 @@ function encodeSSE(event: StreamEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`
 }
 
+function streamMessageKey(message: { role: string; type: string; content: string }) {
+  return `${message.role}:${message.type}:${message.content}`
+}
+
+function shouldPersistStreamMessage(message: { role: string; type: string; content: string }) {
+  return message.role !== "user" && message.content.trim().length > 0
+}
+
 /**
  * POST — 流式 SSE 响应，实时推送 Agent 思考过程
  */
@@ -96,8 +104,52 @@ export async function POST(
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder()
+      const persistedMessageKeys = new Set<string>()
+      const persistPromises: Array<Promise<unknown>> = []
+
+      const persistAssistantMessage = (message: {
+        role: string
+        type: string
+        content: string
+        metadata?: Record<string, unknown> | null
+      }) => {
+        if (!shouldPersistStreamMessage(message)) return
+
+        const key = streamMessageKey(message)
+        if (persistedMessageKeys.has(key)) return
+        persistedMessageKeys.add(key)
+
+        persistPromises.push(
+          saveChatMessage({
+            projectId,
+            role: message.role,
+            type: message.type,
+            content: message.content,
+            metadata: message.metadata ?? null,
+          }).catch((error) => {
+            console.error("Failed to persist streamed agent message", error)
+          }),
+        )
+      }
 
       const emit = (event: StreamEvent) => {
+        if (event.type === "result") {
+          persistAssistantMessage(event.message)
+        }
+
+        if (event.type === "done" && event.finalMessage) {
+          persistAssistantMessage(event.finalMessage)
+        }
+
+        if (event.type === "error") {
+          persistAssistantMessage({
+            role: "agent",
+            type: "agent-error",
+            content: event.message,
+            metadata: { error: true },
+          })
+        }
+
         controller.enqueue(encoder.encode(encodeSSE(event)))
       }
 
@@ -115,11 +167,13 @@ export async function POST(
           emit,
         )
 
+        await Promise.allSettled(persistPromises)
         controller.close()
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : "Unknown agent error"
         emit({ type: "error", message: errMsg })
         emit({ type: "done", status: "failed" })
+        await Promise.allSettled(persistPromises)
         controller.close()
       }
     },

@@ -11,7 +11,7 @@ export function ThinkingIndicator({ content }: { content: string }) {
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]">
           <Loader2 className="size-4 animate-spin text-[var(--color-gold)]" aria-hidden="true" />
-          <span>正在处理，思考过程实时展示中...</span>
+          <span>正在处理...</span>
         </div>
         {hasContent && (
           <div className="max-h-[320px] overflow-y-auto rounded-md border border-border bg-[rgba(252,251,248,0.58)] p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-foreground">

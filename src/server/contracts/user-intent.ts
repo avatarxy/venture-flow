@@ -26,6 +26,11 @@ export const userIntentSchema = z.discriminatedUnion("type", [
     confidence: z.number().min(0).max(1),
   }),
   z.object({
+    type: z.literal("repair_application"),
+    instruction: z.string().min(1),
+    confidence: z.number().min(0).max(1),
+  }),
+  z.object({
     type: z.literal("skip_to_build"),
     confidence: z.number().min(0).max(1),
   }),

@@ -20,25 +20,64 @@ function readString(source: unknown, key: string) {
   return typeof value === "string" ? value : ""
 }
 
+export function createStrategyDisplayModel(content: string, strategy: unknown) {
+  const problemSummary = readString(strategy, "problemSummary")
+  const targetUsers = readArray(strategy, "targetUsers")
+  const painPoints = readArray(strategy, "painPoints")
+  const desiredOutcomes = readArray(strategy, "desiredOutcomes")
+  const successMetrics = readArray(strategy, "successMetrics")
+  const recommendedAppPattern = readString(strategy, "recommendedAppPattern")
+
+  const hasStructuredStrategy = Boolean(
+    problemSummary ||
+      targetUsers.length ||
+      painPoints.length ||
+      desiredOutcomes.length ||
+      successMetrics.length ||
+      recommendedAppPattern,
+  )
+
+  return {
+    rawContent: hasStructuredStrategy ? undefined : content,
+    problemSummary,
+    targetUsers,
+    painPoints,
+    desiredOutcomes,
+    successMetrics,
+    recommendedAppPattern,
+  }
+}
+
 export function StrategyCard({ content, strategy }: StrategyCardProps) {
-  const metrics = readArray(strategy, "successMetrics")
-  const pains = readArray(strategy, "painPoints")
-  const pattern = readString(strategy, "recommendedAppPattern")
+  const model = createStrategyDisplayModel(content, strategy)
 
   return (
     <MessageCard title="Strategy" tone="gold">
       <div className="space-y-3">
-        <p className="whitespace-pre-wrap text-foreground">{content}</p>
-        {pattern ? <p className="text-xs text-muted-foreground">推荐应用模式：{pattern}</p> : null}
-        <div className="grid gap-2">
-          {[...pains.slice(0, 2), ...metrics.slice(0, 2)].map((item) => (
-            <div key={item} className="flex gap-2 text-xs text-muted-foreground">
-              <Target className="mt-0.5 size-3.5 shrink-0 text-[var(--color-gold)]" aria-hidden="true" />
-              <span>{item}</span>
-            </div>
-          ))}
-        </div>
+        {model.rawContent ? <p className="whitespace-pre-wrap text-foreground">{model.rawContent}</p> : null}
+        {model.problemSummary ? <Section title="核心问题" items={[model.problemSummary]} /> : null}
+        {model.targetUsers.length ? <Section title="目标用户" items={[model.targetUsers.join("、")]} /> : null}
+        {model.painPoints.length ? <Section title="痛点" items={model.painPoints} /> : null}
+        {model.desiredOutcomes.length ? <Section title="期望结果" items={model.desiredOutcomes} /> : null}
+        {model.successMetrics.length ? <Section title="成功指标" items={model.successMetrics} /> : null}
+        {model.recommendedAppPattern ? <p className="text-xs text-muted-foreground">推荐应用模式：{model.recommendedAppPattern}</p> : null}
       </div>
     </MessageCard>
+  )
+}
+
+function Section({ title, items }: { title: string; items: string[] }) {
+  return (
+    <section className="space-y-1.5">
+      <p className="text-xs font-semibold text-foreground">{title}</p>
+      <div className="grid gap-1.5">
+        {items.map((item) => (
+          <div key={item} className="flex gap-2 text-xs text-muted-foreground">
+            <Target className="mt-0.5 size-3.5 shrink-0 text-[var(--color-gold)]" aria-hidden="true" />
+            <span>{item}</span>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }

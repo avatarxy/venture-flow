@@ -101,6 +101,21 @@ describe("inspectBuild", () => {
     expect(result.issues.map((issue) => issue.message).join(" ")).toContain("宿主页面 DOM")
   })
 
+  it("rejects invisible control characters that Sandpack cannot parse", () => {
+    const result = inspectBuild({
+      summary: "bad",
+      files: [
+        {
+          path: "/App.tsx",
+          content: "\u0000export default function App() { localStorage.setItem('vf-generated-demo', '1'); return null }",
+        },
+      ],
+    })
+
+    expect(result.passed).toBe(false)
+    expect(result.issues.some((issue) => issue.type === "missing_feature" && issue.message.includes("不可见控制字符"))).toBe(true)
+  })
+
   it("does not flag document.title or document.addEventListener in comments", () => {
     const result = inspectBuild({
       summary: "ok",

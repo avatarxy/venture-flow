@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { createGeneratedVersion } from "./version-repository"
+import { createGeneratedVersion, publishCurrentBuildPreview } from "./version-repository"
 
 const mocks = vi.hoisted(() => ({
   prisma: {
     $transaction: vi.fn(),
+    project: {
+      findUnique: vi.fn(),
+    },
   },
   tx: {
     generatedVersion: {
@@ -24,6 +27,7 @@ describe("createGeneratedVersion", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.prisma.$transaction.mockImplementation(async (callback: (tx: typeof mocks.tx) => Promise<unknown>) => callback(mocks.tx))
+    mocks.prisma.project.findUnique.mockReset()
     mocks.tx.generatedVersion.findFirst.mockResolvedValue(null)
     mocks.tx.generatedVersion.create.mockResolvedValue({
       id: "version_1",
@@ -59,6 +63,7 @@ describe("createGeneratedVersion", () => {
         files: [{ path: "/App.tsx", content: "export default function App() { return null }" }],
         blueprintSnapshot: { productName: "Sales CRM" },
         changeSummary: "Initial version",
+        publishStatus: "DRAFT",
       },
     })
     expect(mocks.tx.project.update).toHaveBeenCalledWith({
@@ -81,5 +86,29 @@ describe("createGeneratedVersion", () => {
 
     expect(result).toMatchObject({ id: "version_1", version: 1 })
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(2)
+  })
+
+  it("publishes the current agent build as a live preview version", async () => {
+    mocks.prisma.project.findUnique.mockResolvedValueOnce({
+      id: "project_1",
+      agentState: {
+        blueprint: { productName: "Sales CRM" },
+        build: {
+          summary: "ok",
+          files: [{ path: "/App.tsx", content: "export default function App(){return <main>OK</main>}" }],
+        },
+      },
+    })
+
+    await publishCurrentBuildPreview("project_1")
+
+    expect(mocks.tx.generatedVersion.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        projectId: "project_1",
+        publishStatus: "LIVE",
+        changeSummary: "发布在线预览",
+        files: [expect.objectContaining({ path: "/App.tsx" })],
+      }),
+    })
   })
 })

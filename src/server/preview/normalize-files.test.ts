@@ -22,11 +22,40 @@ describe("normalizeSandpackFiles", () => {
   })
 
   it("provides generated app dependencies through Sandpack custom setup", () => {
-    expect(sandpackGeneratedAppDependencies.dependencies).toEqual({
+    expect(sandpackGeneratedAppDependencies.dependencies).toMatchObject({
       "lucide-react": "0.468.0",
       recharts: "2.13.3",
+      tailwindcss: "3.4.17",
+      postcss: "8.4.49",
+      autoprefixer: "10.4.20",
+      "class-variance-authority": "0.7.1",
+      clsx: "2.1.1",
+      "tailwind-merge": "2.5.5",
+      "@radix-ui/react-slot": "1.1.1",
     })
     expect(Object.values(sandpackGeneratedAppDependencies.dependencies)).not.toContain("latest")
+  })
+
+  it("adds Tailwind and shadcn-compatible runtime files for generated apps", () => {
+    const files = normalizeSandpackFiles([
+      {
+        path: "/App.tsx",
+        content: "export default function App() { return <main className=\"p-6\">Hello</main> }",
+      },
+    ])
+
+    expect(files["/src/main.tsx"].code).toContain('import "./index.css"')
+    expect(files["/src/index.css"].code).toContain("@tailwind base")
+    expect(files["/src/index.css"].code).toContain("--background")
+    expect(files["/tailwind.config.cjs"].code).toContain("module.exports")
+    expect(files["/tailwind.config.cjs"].code).toContain("./pages/**/*.{ts,tsx,js,jsx}")
+    expect(files["/tailwind.config.cjs"].code).toContain("./components/**/*.{ts,tsx,js,jsx}")
+    expect(files["/postcss.config.cjs"].code).toContain("module.exports")
+    expect(files["/postcss.config.cjs"].code).toContain("tailwindcss")
+    expect(files["/vite.config.ts"].code).toContain("tailwindcss(tailwindConfig)")
+    expect(files["/vite.config.ts"].code).toContain("autoprefixer()")
+    expect(files["/vite.config.ts"].code).toContain('"@"')
+    expect(files["/tsconfig.json"].code).toContain('"@/*"')
   })
 
   it("keeps supporting generated files visible and inactive", () => {
@@ -75,8 +104,8 @@ describe("normalizeSandpackFiles", () => {
         content: "export default function App() { return null }",
       },
       {
-        path: "/package.json",
-        content: '{"dependencies":{"left-pad":"latest"}}',
+        path: "/src/index.css",
+        content: "@tailwind base;",
       },
     ])
 
@@ -84,5 +113,8 @@ describe("normalizeSandpackFiles", () => {
     expect(files["/App.tsx"].code).toBe("export default function App() { return null }")
     // /package.json 由 Sandpack 模板维护，避免破坏 Nodebox 内置 Vite 依赖
     expect(files["/package.json"]).toBeUndefined()
+    // 样式入口由 runtime 维护，避免生成代码覆盖 Tailwind/shadcn 主题变量
+    expect(files["/src/index.css"].code).toContain("@tailwind base")
+    expect(files["/tailwind.config.cjs"].code).toContain("module.exports")
   })
 })

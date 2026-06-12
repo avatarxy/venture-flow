@@ -1,8 +1,17 @@
+"use client"
+
 import type { ReactNode } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { LayoutDashboard, Sparkles } from "lucide-react"
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname()
+
+  if (pathname.startsWith("/preview")) {
+    return children
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border px-6 py-3">

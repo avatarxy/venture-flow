@@ -27,6 +27,81 @@ describe("generateApplication", () => {
     )
   })
 
+  it("requires modular pages, Tailwind, and shadcn ui in the builder prompt", async () => {
+    mockedGenerateStructuredObject.mockResolvedValueOnce({
+      summary: "生成销售管理应用",
+      files: [{ path: "/App.tsx", content: "export default function App() { return null }" }],
+    })
+
+    await generateApplication(validBlueprint)
+
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("/pages"),
+      }),
+    )
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("Tailwind"),
+      }),
+    )
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("shadcn/ui"),
+      }),
+    )
+  })
+
+  it("requires a complete interactive local-first product in the builder prompt", async () => {
+    mockedGenerateStructuredObject.mockResolvedValueOnce({
+      summary: "生成销售管理应用",
+      files: [{ path: "/App.tsx", content: "export default function App() { return null }" }],
+    })
+
+    await generateApplication(validBlueprint)
+
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("禁止生成建设中"),
+      }),
+    )
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("/lib/storage.ts"),
+      }),
+    )
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("Postgres adapter"),
+      }),
+    )
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("每个页面都必须可交互"),
+      }),
+    )
+  })
+
+  it("forbids react-router-dom and asks for state based routing", async () => {
+    mockedGenerateStructuredObject.mockResolvedValueOnce({
+      summary: "生成销售管理应用",
+      files: [{ path: "/App.tsx", content: "export default function App() { return null }" }],
+    })
+
+    await generateApplication(validBlueprint)
+
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("react-router-dom"),
+      }),
+    )
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("useState"),
+      }),
+    )
+  })
+
   it("throws when generated build is missing /App.tsx", async () => {
     // 模拟 LLM 返回了没有 /App.tsx 的结果
     // 新流程：loose schema 接收 → normalizeFilePath → buildOutputSchema.parse 校验

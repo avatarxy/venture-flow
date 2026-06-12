@@ -54,10 +54,10 @@ export const productBlueprintSchema = z
     goals: z.array(z.string().min(1)).min(1),
     successMetrics: z.array(z.string().min(1)).min(1),
     appPattern: appPatternSchema,
-    entities: z.array(entitySchema).min(1).max(4),
-    pages: z.array(pageSchema).min(2).max(5),
-    workflows: z.array(workflowSchema).min(1).max(5),
-    decisions: z.array(productDecisionSchema).min(1).max(8),
+    entities: z.array(entitySchema).min(1).max(6),
+    pages: z.array(pageSchema).min(5).max(8),
+    workflows: z.array(workflowSchema).min(1).max(8),
+    decisions: z.array(productDecisionSchema).min(1).max(10),
     seedData: z.record(z.string(), z.array(z.record(z.string(), jsonValueSchema))),
   })
   .superRefine((blueprint, ctx) => {

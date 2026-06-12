@@ -2,10 +2,22 @@ import { createTool } from "@mastra/core/tools"
 import { z } from "zod"
 
 export const capabilityLimits = {
-  maxPages: 5,
-  maxEntities: 4,
-  maxCoreFeatures: 7,
-  allowedDependencies: ["react", "react-dom", "lucide-react", "recharts"],
+  maxPages: 8,
+  maxEntities: 6,
+  maxCoreFeatures: 12,
+  allowedDependencies: [
+    "react",
+    "react-dom",
+    "lucide-react",
+    "recharts",
+    "tailwindcss",
+    "postcss",
+    "autoprefixer",
+    "class-variance-authority",
+    "clsx",
+    "tailwind-merge",
+    "@radix-ui/react-slot",
+  ],
   unsupported: ["实时多人协同编辑", "复杂支付结算", "任意后端运行环境", "任意 NPM 依赖", "原生移动应用"],
 } as const
 

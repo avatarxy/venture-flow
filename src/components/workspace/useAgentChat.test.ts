@@ -81,4 +81,34 @@ describe("workspace agent chat message merging", () => {
       }),
     ])
   })
+
+  it("does not inject duplicate cards when done.finalMessage repeats a result message", async () => {
+    const repeatedMessage = {
+      role: "agent",
+      type: "agent-question",
+      content: "已完成当前可执行步骤，但完成条件还未通过。你可以继续补充需求或让我重试。",
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      [
+        `data: ${JSON.stringify({ type: "result", message: repeatedMessage, plan: [] })}`,
+        "",
+        `data: ${JSON.stringify({ type: "done", status: "waiting_for_user", finalMessage: repeatedMessage })}`,
+        "",
+      ].join("\n"),
+      { headers: { "content-type": "text/event-stream" } },
+    )))
+
+    const transport = new VentureFlowAgentTransport("/api/test")
+    const cards: AgentMessagePayload[] = []
+    transport.onCard((card) => cards.push(card))
+
+    const stream = await transport.sendMessages({
+      messages: [message({ id: "user-1", role: "user", text: "继续" })],
+    } as never)
+
+    await stream?.pipeTo(new WritableStream())
+
+    expect(cards).toEqual([repeatedMessage])
+    expect(transport.getAgentMessages()).toEqual([repeatedMessage])
+  })
 })

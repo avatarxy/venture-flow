@@ -39,4 +39,15 @@ describe("patchRequestSchema", () => {
       }),
     ).toThrow("Patch request cannot target Sandpack runtime file: /package.json")
   })
+
+  it("rejects Tailwind runtime files as patch targets", () => {
+    expect(() =>
+      patchRequestSchema.parse({
+        goal: "Improve visual design",
+        recommendation: "Change global Tailwind variables",
+        targetFiles: ["/src/index.css"],
+        constraints: ["Keep generated app in Sandpack"],
+      }),
+    ).toThrow("Patch request cannot target Sandpack runtime file: /src/index.css")
+  })
 })

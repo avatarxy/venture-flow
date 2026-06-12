@@ -78,7 +78,7 @@ describe("contracts", () => {
   it("rejects blueprint with too many pages", () => {
     const result = productBlueprintSchema.safeParse({
       ...validBlueprint,
-      pages: Array.from({ length: 6 }, (_, index) => ({
+      pages: Array.from({ length: 9 }, (_, index) => ({
         id: `page-${index}`,
         name: "页面",
         route: `/p${index}`,
@@ -88,6 +88,61 @@ describe("contracts", () => {
     })
 
     expect(result.success).toBe(false)
+  })
+
+  it("accepts complete product blueprint with six pages", () => {
+    const result = productBlueprintSchema.safeParse({
+      ...validBlueprint,
+      entities: [
+        validBlueprint.entities[0],
+        {
+          name: "Customer",
+          label: "客户",
+          fields: [
+            { name: "name", label: "名称", type: "string", required: true },
+            { name: "owner", label: "负责人", type: "string", required: true },
+          ],
+        },
+      ],
+      pages: [
+        validBlueprint.pages[0],
+        validBlueprint.pages[1],
+        {
+          id: "customers",
+          name: "客户",
+          route: "/customers",
+          purpose: "管理客户档案和负责人信息",
+          components: [{ type: "table", title: "客户列表", entityName: "Customer" }],
+        },
+        {
+          id: "follow-ups",
+          name: "跟进",
+          route: "/follow-ups",
+          purpose: "记录每次销售沟通和下一步计划",
+          components: [{ type: "form", title: "跟进记录", entityName: "Lead" }],
+        },
+        {
+          id: "tasks",
+          name: "待办",
+          route: "/tasks",
+          purpose: "追踪销售团队每日待办和逾期提醒",
+          components: [{ type: "table", title: "待办列表", entityName: "Lead" }],
+        },
+        {
+          id: "reports",
+          name: "报表",
+          route: "/reports",
+          purpose: "展示销售预测、漏斗转化和跟进效率",
+          components: [{ type: "chart", title: "销售预测", entityName: "Lead" }],
+        },
+      ],
+      seedData: {
+        Lead: validBlueprint.seedData.Lead,
+        Customer: [{ name: "Acme", owner: "张三" }],
+      },
+    })
+
+    expect(result.success).toBe(true)
   })
 
   it("rejects blueprint references to unknown entities", () => {

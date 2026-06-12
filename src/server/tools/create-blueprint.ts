@@ -31,7 +31,7 @@ const looseBlueprintSchema = z.object({
     label: z.string().min(1),
     description: z.string().optional(),
     fields: z.array(looseFieldSchema).min(1).max(12),
-  })).min(1).max(4),
+  })).min(1).max(6),
   pages: z.array(z.object({
     id: z.string(),
     name: z.string().min(1),
@@ -42,17 +42,17 @@ const looseBlueprintSchema = z.object({
       title: z.string().min(1),
       entityName: z.string().optional(),
     })).min(1).max(5),
-  })).min(2).max(5),
+  })).min(5).max(8),
   workflows: z.array(z.object({
     title: z.string().min(1),
     steps: z.array(z.string().min(1)).min(2),
-  })).min(1).max(5),
+  })).min(1).max(8),
   decisions: z.array(z.object({
     title: z.string().min(1),
     decision: z.string().min(1),
     reason: z.string().min(1),
     tradeoff: z.string().min(1),
-  })).min(1).max(8),
+  })).min(1).max(10),
   seedData: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
 })
 
@@ -99,6 +99,11 @@ const pageTerms: Array<[string, string]> = [
   ["商机", "opportunities"],
   ["跟进", "follow-ups"],
   ["任务", "tasks"],
+  ["报表", "reports"],
+  ["报告", "reports"],
+  ["预测", "forecast"],
+  ["设置", "settings"],
+  ["导入", "import"],
 ]
 
 function wordsFromAscii(value: string) {
@@ -232,7 +237,14 @@ export async function createBlueprint(input: z.infer<typeof createBlueprintInput
     const rawBlueprint = await generateStructuredObject({
       schema: looseBlueprintSchema,
       system:
-        `你是 VentureFlow 的 Product Blueprint Agent。请把策略转成可生成应用的产品蓝图，严格控制在 MVP 能力边界内，实体不超过 4 个，页面不超过 5 个。
+        `你是 VentureFlow 的 Product Blueprint Agent。请把策略转成可生成应用的完整产品蓝图，不要只生成演示级 MVP。当前用户业务问题：${input.originalProblem}
+
+完整产品边界：
+- 实体不超过 6 个，页面必须为 5-8 个页面，workflow 不超过 8 个。
+- 必须覆盖业务闭环：总览、核心对象管理、状态流转、记录/任务、分析报表或设置中的至少 5 类页面。
+- 页面必须是可实现的真实功能页，禁止生成“建设中”、Coming soon、占位页或只有说明文字的页面。
+- 如果业务问题是销售、客户、线索、Excel 漏跟类 CRM 场景，优先规划：Dashboard、线索列表、线索看板、客户/联系人、跟进记录、待办提醒、销售预测/报表、设置/数据导入等页面。
+- seedData 必须覆盖主要实体，便于生成应用首次打开即有可操作数据。
 
 标识符规则：
 - entities[].name 使用英文 PascalCase，例如 Lead、Customer、FollowUp。

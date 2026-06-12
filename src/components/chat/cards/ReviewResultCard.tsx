@@ -22,9 +22,16 @@ function issueMessages(review: unknown) {
     .filter((message): message is string => typeof message === "string")
 }
 
+export function createReviewIssueItems(review: unknown) {
+  return issueMessages(review).map((message, index) => ({
+    key: `${index}-${message}`,
+    message,
+  }))
+}
+
 export function ReviewResultCard({ content, review }: ReviewResultCardProps) {
   const passed = isPassed(review)
-  const issues = issueMessages(review)
+  const issues = createReviewIssueItems(review)
 
   return (
     <MessageCard title="代码审查" tone={passed ? "success" : "error"}>
@@ -36,7 +43,7 @@ export function ReviewResultCard({ content, review }: ReviewResultCardProps) {
         {issues.length > 0 ? (
           <ul className="space-y-1 text-xs text-muted-foreground">
             {issues.slice(0, 4).map((issue) => (
-              <li key={issue}>{issue}</li>
+              <li key={issue.key}>{issue.message}</li>
             ))}
           </ul>
         ) : null}

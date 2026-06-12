@@ -58,6 +58,27 @@ const blueprint = {
       purpose: "Review lead pipeline performance",
       components: [{ type: "dashboard", title: "Pipeline dashboard", entityName: "Lead" }],
     },
+    {
+      id: "kanban",
+      name: "Pipeline",
+      route: "/kanban",
+      purpose: "Move leads through pipeline stages and identify stalled opportunities",
+      components: [{ type: "kanban", title: "Pipeline board", entityName: "Lead" }],
+    },
+    {
+      id: "follow-ups",
+      name: "Follow-ups",
+      route: "/follow-ups",
+      purpose: "Record sales conversations and schedule the next follow-up",
+      components: [{ type: "form", title: "Follow-up form", entityName: "Lead" }],
+    },
+    {
+      id: "reports",
+      name: "Reports",
+      route: "/reports",
+      purpose: "Analyze conversion, forecast value, and follow-up performance",
+      components: [{ type: "chart", title: "Sales reports", entityName: "Lead" }],
+    },
   ],
   workflows: [{ title: "Lead follow-up", steps: ["Create lead", "Update status"] }],
   decisions: [

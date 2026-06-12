@@ -4,7 +4,7 @@ import { validateBlueprintCapability } from "./validate-blueprint"
 describe("validateBlueprintCapability", () => {
   it("rejects unsupported large blueprint", () => {
     const result = validateBlueprintCapability({
-      pagesCount: 6,
+      pagesCount: 9,
       entitiesCount: 1,
       coreFeaturesCount: 3,
     })
@@ -14,7 +14,7 @@ describe("validateBlueprintCapability", () => {
   })
 
   it("accepts blueprint within MVP capability bounds", () => {
-    expect(validateBlueprintCapability({ pagesCount: 5, entitiesCount: 4, coreFeaturesCount: 7 })).toEqual({
+    expect(validateBlueprintCapability({ pagesCount: 8, entitiesCount: 6, coreFeaturesCount: 12 })).toEqual({
       passed: true,
       issues: [],
     })

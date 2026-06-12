@@ -89,12 +89,17 @@ function friendlyToolName(name: string) {
   return toolNameLabels[name] ?? name
 }
 
+function agentMessageKey(message: AgentMessagePayload) {
+  return `${message.role}:${message.type}:${message.content}`
+}
+
 // ---------------------------------------------------------------------------
 // SSE Transport
 // ---------------------------------------------------------------------------
 
 class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
   private latestAgentMessages: AgentMessagePayload[] = []
+  private latestAgentMessageKeys = new Set<string>()
   private onCardCallback: ((msg: AgentMessagePayload) => void) | null = null
 
   constructor(private readonly api: string) {}
@@ -106,6 +111,7 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
 
   clearAgentMessages() {
     this.latestAgentMessages = []
+    this.latestAgentMessageKeys.clear()
   }
 
   getAgentMessages() {
@@ -171,8 +177,18 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
       metadata: { ...(msg.metadata ?? {}), type: msg.type, agentState: payload.agentState },
     }))
     this.latestAgentMessages = agentMessages
+    this.latestAgentMessageKeys = new Set(agentMessages.map(agentMessageKey))
 
     return createSingleMessageStream(agentMessages.map((msg) => msg.content).join("\n\n"))
+  }
+
+  private pushAgentMessage(message: AgentMessagePayload) {
+    const key = agentMessageKey(message)
+    if (this.latestAgentMessageKeys.has(key)) return false
+
+    this.latestAgentMessageKeys.add(key)
+    this.latestAgentMessages.push(message)
+    return true
   }
 
   private handleSSEStream(body: ReadableStream<Uint8Array>, abortSignal?: AbortSignal): ReadableStream<UIMessageChunk> {
@@ -221,9 +237,9 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
                   }
 
                   case "result": {
-                    this.latestAgentMessages.push(event.message)
+                    const added = this.pushAgentMessage(event.message)
                     // 通过回调即时注入独立卡片
-                    if (event.message.content && this.onCardCallback) {
+                    if (added && event.message.content && this.onCardCallback) {
                       this.onCardCallback(event.message)
                     }
                     break
@@ -233,9 +249,9 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
                     break
 
                   case "done": {
-                    if (event.finalMessage && !this.latestAgentMessages.includes(event.finalMessage)) {
-                      this.latestAgentMessages.push(event.finalMessage)
-                      if (event.finalMessage.content && this.onCardCallback) {
+                    if (event.finalMessage) {
+                      const added = this.pushAgentMessage(event.finalMessage)
+                      if (added && event.finalMessage.content && this.onCardCallback) {
                         this.onCardCallback(event.finalMessage)
                       }
                     }
@@ -249,8 +265,8 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
                       content: event.message,
                       metadata: { error: true },
                     }
-                    this.latestAgentMessages.push(errorMessage)
-                    if (this.onCardCallback) {
+                    const added = this.pushAgentMessage(errorMessage)
+                    if (added && this.onCardCallback) {
                       this.onCardCallback(errorMessage)
                     }
                     break

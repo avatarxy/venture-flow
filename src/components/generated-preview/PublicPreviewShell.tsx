@@ -11,7 +11,7 @@ type PublicPreviewShellProps = {
 export function PublicPreviewShell({ files }: PublicPreviewShellProps) {
   return (
     <main className="min-h-screen bg-background">
-      <SandpackErrorBoundary fallbackMessage="Public Preview 渲染失败">
+      <SandpackErrorBoundary fallbackMessage="公开预览渲染失败">
         <SandpackRunner files={files} showCodeTab={false} />
       </SandpackErrorBoundary>
     </main>

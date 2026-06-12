@@ -18,7 +18,7 @@ export function AgentProgressBar({ currentStep, totalSteps, isRunning, plan = []
     <div className="border-b border-border px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-xs font-semibold text-foreground">Agent Pipeline</p>
+          <p className="truncate text-xs font-semibold text-foreground">执行管道</p>
           <p className="mt-1 truncate text-xs text-muted-foreground">{isRunning ? activeStep : `${currentStep}/${safeTotal} 步骤完成`}</p>
         </div>
         <div className="flex items-center gap-1 text-xs text-muted-foreground">

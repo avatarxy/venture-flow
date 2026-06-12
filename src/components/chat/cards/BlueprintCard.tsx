@@ -2,6 +2,7 @@
 
 import { Boxes, Workflow } from "lucide-react"
 import { MessageCard } from "./MessageCard"
+import { MarkdownContent } from "../MarkdownContent"
 
 type BlueprintCardProps = {
   content: string
@@ -26,9 +27,9 @@ export function BlueprintCard({ content, blueprint }: BlueprintCardProps) {
   const workflows = readList(blueprint, "workflows")
 
   return (
-    <MessageCard title="Product Blueprint" tone="info">
+    <MessageCard title="产品蓝图" tone="info">
       <div className="space-y-3">
-        <p className="whitespace-pre-wrap">{content}</p>
+        <MarkdownContent content={content} />
         <div className="grid grid-cols-3 gap-2">
           <Metric label="实体" value={entities.length} />
           <Metric label="页面" value={pages.length} />

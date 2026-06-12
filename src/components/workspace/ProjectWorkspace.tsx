@@ -60,7 +60,7 @@ export function ProjectWorkspace({
           <PaneButton
             active={activePane === "preview"}
             onClick={() => setActivePane("preview")}
-            label="Preview"
+            label="预览"
             icon={<MonitorPlay className="size-4" aria-hidden="true" />}
           />
         </div>

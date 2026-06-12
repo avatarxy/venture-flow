@@ -2,6 +2,7 @@
 
 import { Target } from "lucide-react"
 import { MessageCard } from "./MessageCard"
+import { MarkdownContent } from "../MarkdownContent"
 
 type StrategyCardProps = {
   content: string
@@ -52,9 +53,9 @@ export function StrategyCard({ content, strategy }: StrategyCardProps) {
   const model = createStrategyDisplayModel(content, strategy)
 
   return (
-    <MessageCard title="Strategy" tone="gold">
+    <MessageCard title="策略分析" tone="gold">
       <div className="space-y-3">
-        {model.rawContent ? <p className="whitespace-pre-wrap text-foreground">{model.rawContent}</p> : null}
+        {model.rawContent ? <MarkdownContent content={model.rawContent} /> : null}
         {model.problemSummary ? <Section title="核心问题" items={[model.problemSummary]} /> : null}
         {model.targetUsers.length ? <Section title="目标用户" items={[model.targetUsers.join("、")]} /> : null}
         {model.painPoints.length ? <Section title="痛点" items={model.painPoints} /> : null}

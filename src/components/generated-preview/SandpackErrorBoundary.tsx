@@ -32,7 +32,7 @@ export class SandpackErrorBoundary extends Component<SandpackErrorBoundaryProps,
       return this.props.children
     }
 
-    const message = this.props.fallbackMessage ?? "Preview 渲染失败"
+    const message = this.props.fallbackMessage ?? "预览渲染失败"
 
     return (
       <div className="flex h-full items-center justify-center px-6">

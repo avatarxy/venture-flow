@@ -2,6 +2,7 @@
 
 import { CheckCircle2, XCircle } from "lucide-react"
 import { MessageCard } from "./MessageCard"
+import { MarkdownContent } from "../MarkdownContent"
 
 type ReviewResultCardProps = {
   content: string
@@ -26,11 +27,11 @@ export function ReviewResultCard({ content, review }: ReviewResultCardProps) {
   const issues = issueMessages(review)
 
   return (
-    <MessageCard title="Review" tone={passed ? "success" : "error"}>
+    <MessageCard title="代码审查" tone={passed ? "success" : "error"}>
       <div className="space-y-3">
         <div className="flex gap-2">
           {passed ? <CheckCircle2 className="mt-1 size-4 shrink-0 text-[var(--color-success)]" aria-hidden="true" /> : <XCircle className="mt-1 size-4 shrink-0 text-[var(--color-error)]" aria-hidden="true" />}
-          <p className="whitespace-pre-wrap">{content}</p>
+          <MarkdownContent content={content} />
         </div>
         {issues.length > 0 ? (
           <ul className="space-y-1 text-xs text-muted-foreground">

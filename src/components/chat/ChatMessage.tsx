@@ -2,6 +2,7 @@
 
 import { User } from "lucide-react"
 import { InlineActions } from "./InlineActions"
+import { MarkdownContent } from "./MarkdownContent"
 import { extractPreviewFiles, getMessageText, getMessageType, type VentureFlowUiMessage } from "./message-utils"
 import { BlueprintCard } from "./cards/BlueprintCard"
 import { BuildResultCard } from "./cards/BuildResultCard"
@@ -93,7 +94,7 @@ export function ChatMessage({ message, onAction, actionDisabled }: ChatMessagePr
   if (type === "agent-question") {
     return (
       <div>
-        <MessageCard title="Agent 提问" tone="gold">
+        <MessageCard title="助手提问" tone="gold">
           <p className="whitespace-pre-wrap">{content}</p>
         </MessageCard>
         <InlineActions onAction={onAction} disabled={actionDisabled} context={type as ChatMessageType} />
@@ -102,8 +103,8 @@ export function ChatMessage({ message, onAction, actionDisabled }: ChatMessagePr
   }
 
   return (
-    <MessageCard title={type === "system-info" ? "System" : "Agent"} tone="neutral">
-      <p className="whitespace-pre-wrap">{content}</p>
+    <MessageCard title={type === "system-info" ? "系统" : "助手"} tone="neutral">
+      <MarkdownContent content={content} />
     </MessageCard>
   )
 }

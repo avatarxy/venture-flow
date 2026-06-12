@@ -62,7 +62,7 @@ export function ChatPanel({ messages, input, isLoading, onInputChange, onSubmit,
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {messages.length === 0 ? (
           <div className="flex h-full min-h-[280px] items-center justify-center text-center text-sm leading-6 text-muted-foreground">
-            <p className="max-w-[280px]">描述业务问题或让 Agent 继续，它会把 Strategy、Blueprint、Build 和 Review 逐步放到这里。</p>
+            <p className="max-w-[280px]">描述业务问题或让 Agent 继续，它会把策略分析、产品蓝图、应用生成和代码审查逐步放到这里。</p>
           </div>
         ) : null}
         {messages.map((message) => (

@@ -28,7 +28,7 @@ export function ChatInput({ input, isLoading, onInputChange, onSubmit, onStop }:
             }
           }}
           rows={3}
-          placeholder="告诉 Agent 要继续、修改 Blueprint，或重新生成某个页面..."
+          placeholder="告诉 Agent 要继续、修改产品蓝图，或重新生成某个页面..."
           className="min-h-[84px] w-full resize-none bg-transparent px-2 py-2 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
         />
         <div className="flex items-center justify-between gap-2 px-1 pb-1">

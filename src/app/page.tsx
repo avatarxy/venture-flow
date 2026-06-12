@@ -3,17 +3,17 @@ import { CreateProjectForm } from "@/components/projects/CreateProjectForm"
 
 const capabilities = [
   {
-    title: "Strategy",
+    title: "策略分析",
     description: "把业务问题拆成目标用户、痛点、结果指标和假设。",
     icon: ShieldCheck,
   },
   {
-    title: "Blueprint",
+    title: "产品蓝图",
     description: "生成可校验的产品蓝图，作为应用生成前的受控契约。",
     icon: Boxes,
   },
   {
-    title: "Iteration",
+    title: "迭代优化",
     description: "基于真实使用事件分析效果，再生成改进版本。",
     icon: ChartNoAxesCombined,
   },
@@ -41,7 +41,7 @@ export default function HomePage() {
             <p className="text-sm font-semibold">MVP Flow</p>
             <ol className="space-y-3 text-sm text-muted-foreground">
               <li>1. 输入业务问题</li>
-              <li>2. Agent 生成 Strategy 与 Blueprint</li>
+              <li>2. Agent 生成策略分析与产品蓝图</li>
               <li>3. Sandpack 运行 React App</li>
               <li>4. Usage Analytics 驱动改进版本</li>
             </ol>

@@ -2,6 +2,7 @@
 
 import { Code2, MonitorPlay } from "lucide-react"
 import { MessageCard } from "./MessageCard"
+import { MarkdownContent } from "../MarkdownContent"
 
 type BuildResultCardProps = {
   content: string
@@ -16,9 +17,9 @@ function fileCount(build: unknown) {
 
 export function BuildResultCard({ content, build }: BuildResultCardProps) {
   return (
-    <MessageCard title="Build Result" tone="success">
+    <MessageCard title="生成结果" tone="success">
       <div className="space-y-3">
-        <p className="whitespace-pre-wrap">{content}</p>
+        <MarkdownContent content={content} />
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="flex items-center gap-2 border border-border bg-[rgba(252,251,248,0.48)] p-2 [border-radius:6px]">
             <Code2 className="size-3.5 text-[var(--color-success)]" aria-hidden="true" />
@@ -26,7 +27,7 @@ export function BuildResultCard({ content, build }: BuildResultCardProps) {
           </div>
           <div className="flex items-center gap-2 border border-border bg-[rgba(252,251,248,0.48)] p-2 [border-radius:6px]">
             <MonitorPlay className="size-3.5 text-[var(--color-success)]" aria-hidden="true" />
-            Preview 已同步
+            预览已同步
           </div>
         </div>
       </div>

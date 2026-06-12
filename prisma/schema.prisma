@@ -50,6 +50,7 @@ model Project {
   versions         GeneratedVersion[] @relation("ProjectVersions")
   currentVersion   GeneratedVersion?  @relation("ProjectCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
   usageEvents      UsageEvent[]
+  chatMessages     ChatMessage[]
   agentState       AgentState?
 }
 
@@ -85,16 +86,24 @@ model GeneratedVersion {
 }
 
 model AgentState {
-  projectId      String   @id
-  status         String
-  currentPlan    Json
-  currentStep    Int      @default(0)
-  toolCalls      Json
-  buildAttempts  Int      @default(0)
-  repairAttempts Int      @default(0)
-  totalTokens    Int      @default(0)
-  updatedAt      DateTime @updatedAt
-  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId       String   @id
+  originalProblem String   @default("")
+  goal            String   @default("")
+  status          String
+  currentPlan     Json
+  currentStep     Int      @default(0)
+  strategy        Json?
+  blueprint       Json?
+  build           Json?
+  review          Json?
+  optimization    Json?
+  capabilities    Json?
+  toolCalls       Json
+  buildAttempts   Int      @default(0)
+  repairAttempts  Int      @default(0)
+  totalTokens     Int      @default(0)
+  updatedAt       DateTime @updatedAt
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model UsageEvent {
@@ -111,4 +120,18 @@ model UsageEvent {
   @@index([projectId, createdAt])
   @@index([versionId, createdAt])
   @@index([eventName, createdAt])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  projectId String
+  role      String   // "user" | "agent" | "system"
+  type      String   // "user-text" | "agent-strategy" | "agent-blueprint" | "agent-build" | "agent-review" | "agent-error" | "agent-question" | "system-info"
+  content   String   @db.Text  // Markdown 文本内容
+  metadata  Json?    // 结构化数据（完整 Strategy/Blueprint/Build/AgentState JSON）
+  createdAt DateTime @default(now())
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }

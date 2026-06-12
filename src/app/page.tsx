@@ -1,5 +1,5 @@
-import { ArrowRight, Boxes, ChartNoAxesCombined, ShieldCheck } from "lucide-react"
-import Link from "next/link"
+import { Boxes, ChartNoAxesCombined, ShieldCheck } from "lucide-react"
+import { CreateProjectForm } from "@/components/projects/CreateProjectForm"
 
 const capabilities = [
   {
@@ -21,27 +21,22 @@ const capabilities = [
 
 export default function HomePage() {
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-57px)] max-w-6xl flex-col gap-10 px-6 py-10">
-      <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
+    <main className="mx-auto flex min-h-[calc(100vh-57px)] max-w-6xl flex-col gap-8 px-6 py-8 md:py-12">
+      <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
         <div className="space-y-6">
           <div className="inline-flex rounded-full border border-[var(--color-border-interactive)] px-3 py-1 text-xs text-muted-foreground">
             Problem-first AI solution builder
           </div>
           <div className="max-w-3xl space-y-4">
-            <h1 className="text-4xl font-semibold leading-tight md:text-6xl">VentureFlow</h1>
+            <h1 className="text-5xl font-semibold leading-[1.05] md:text-6xl">VentureFlow</h1>
             <p className="max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
               从业务问题出发，生成可运行、可分析、可迭代的业务应用。
             </p>
           </div>
-          <Link
-            className="inline-flex w-fit items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm text-primary-foreground shadow-[var(--shadow-button-gold-inset)] hover:bg-[var(--color-gold-hover)]"
-            href="/projects"
-          >
-            进入项目工作台
-            <ArrowRight className="size-4" aria-hidden="true" />
-          </Link>
+          <CreateProjectForm />
+          <p className="text-sm text-muted-foreground">试试：销售团队在用 Excel 管理客户，经常漏跟线索。</p>
         </div>
-        <div className="rounded-lg border border-border bg-[rgba(252,251,248,0.55)] p-5">
+        <div className="border border-border bg-[rgba(252,251,248,0.55)] p-5 [border-radius:8px]">
           <div className="space-y-4">
             <p className="text-sm font-semibold">MVP Flow</p>
             <ol className="space-y-3 text-sm text-muted-foreground">
@@ -59,7 +54,7 @@ export default function HomePage() {
           const Icon = capability.icon
 
           return (
-            <article key={capability.title} className="rounded-lg border border-border p-5">
+            <article key={capability.title} className="border border-border p-5 [border-radius:8px]">
               <Icon className="mb-4 size-5 text-[var(--color-gold)]" aria-hidden="true" />
               <h2 className="text-lg font-semibold">{capability.title}</h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{capability.description}</p>

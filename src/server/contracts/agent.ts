@@ -1,19 +1,25 @@
 import { z } from "zod"
 import { buildOutputSchema } from "./build"
 import { productBlueprintSchema } from "./blueprint"
+import { inspectCapabilitiesOutputSchema } from "../tools/inspect-capabilities"
 import { jsonObjectSchema } from "./json"
+import { optimizationOutputSchema } from "./optimization"
 import { reviewResultSchema } from "./review"
 import { strategyOutputSchema } from "./strategy"
+import { userIntentSchema } from "./user-intent"
 
 export const toolNameSchema = z.enum([
   "analyze_problem",
   "inspect_capabilities",
   "create_blueprint",
   "validate_blueprint",
+  "modify_blueprint",
   "generate_application",
+  "regenerate_page",
   "inspect_build",
   "run_preview",
   "repair_application",
+  "optimize_product",
   "save_project",
   "finish_task",
 ])
@@ -58,11 +64,17 @@ export const agentStateSchema = z.object({
   blueprint: productBlueprintSchema.optional(),
   build: buildOutputSchema.optional(),
   review: reviewResultSchema.optional(),
+  optimization: optimizationOutputSchema.optional(),
+  capabilities: inspectCapabilitiesOutputSchema.optional(),
   toolCalls: z.array(toolCallRecordSchema),
   buildAttempts: z.number().int().nonnegative(),
   repairAttempts: z.number().int().nonnegative(),
   totalTokens: z.number().int().nonnegative(),
-  status: z.enum(["planning", "executing", "waiting_for_user", "completed", "failed"]),
+  status: z.enum(["planning", "executing", "waiting_for_user", "completed", "failed", "stopped"]),
+
+  // 对话式新增字段
+  waitingForStep: z.string().optional(),
+  lastUserIntent: userIntentSchema.optional(),
 })
 
 export type ToolName = z.infer<typeof toolNameSchema>

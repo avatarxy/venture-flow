@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { agentActionSchema, productBlueprintSchema, strategyOutputSchema } from "."
+import { agentActionSchema, buildOutputSchema, productBlueprintSchema, reviewResultSchema, strategyOutputSchema } from "."
 
 const validBlueprint = {
   productName: "销售管理",
@@ -78,6 +78,55 @@ describe("contracts", () => {
         purpose: "展示核心业务信息",
         components: [{ type: "table", title: "列表" }],
       })),
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects blueprint references to unknown entities", () => {
+    const result = productBlueprintSchema.safeParse({
+      ...validBlueprint,
+      pages: [
+        validBlueprint.pages[0],
+        {
+          ...validBlueprint.pages[1],
+          components: [{ type: "table", title: "客户列表", entityName: "Customer" }],
+        },
+      ],
+      seedData: { Customer: [] },
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  it("requires generated builds to include a unique /App.tsx entrypoint", () => {
+    const result = buildOutputSchema.safeParse({
+      summary: "生成线索管理应用",
+      files: [
+        { path: "/App.tsx", content: "export default function App() { return null }" },
+        { path: "/App.tsx", content: "export default function Duplicate() { return null }" },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects unsafe generated file paths", () => {
+    const result = buildOutputSchema.safeParse({
+      summary: "生成线索管理应用",
+      files: [
+        { path: "/App.tsx", content: "export default function App() { return null }" },
+        { path: "/components/../storage.ts", content: "export const key = 'x'" },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects inconsistent review results", () => {
+    const result = reviewResultSchema.safeParse({
+      passed: true,
+      issues: [{ type: "missing_file", message: "缺少入口文件", severity: "high" }],
     })
 
     expect(result.success).toBe(false)

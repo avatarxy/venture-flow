@@ -244,7 +244,7 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
 
                   case "result": {
                     collectedMessages.push(event.message)
-                    // 推送实际执行结果的内容
+                    // 仅推送有实质内容的结果（跳过 inspect_capabilities 等后台步骤）
                     if (event.message.content) {
                       pushText(`\n${event.message.content}\n`)
                     }

@@ -863,6 +863,16 @@ function buildAgentMessage(
         metadata: { optimization: state.optimization, agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
       }
 
+    // Non-AI steps — brief status only, don't produce a card
+    case "inspect_capabilities":
+    case "validate_blueprint":
+      return {
+        role: "agent",
+        type: "system-info",
+        content: "", // 空内容表示不生成独立卡片，仅更新进度条
+        metadata: { agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
+      }
+
     default:
       return {
         role: "agent",

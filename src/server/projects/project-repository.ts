@@ -1,5 +1,7 @@
 import { prisma } from "@/server/db/client"
 
+const demoProblem = "我们的销售团队使用 Excel 管理客户和线索，经常忘记跟进，而且负责人无法快速查看当前销售进度。"
+
 export function validateProblemInput(problem: string) {
   if (problem.trim().length < 20) {
     throw new Error("业务问题至少需要 20 个字符")
@@ -34,7 +36,27 @@ export async function createProject(originalProblem: string) {
   })
 }
 
+function shouldUseDemoProject(projectId: string) {
+  return process.env.VENTUREFLOW_ENABLE_DEMO_PROJECT === "1" && projectId === "demo-project"
+}
+
 export async function getProject(projectId: string) {
+  if (shouldUseDemoProject(projectId)) {
+    return {
+      id: "demo-project",
+      name: "销售团队线索管理",
+      originalProblem: demoProblem,
+      status: "DRAFT",
+      strategy: null,
+      blueprint: null,
+      currentVersionId: null,
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+      agentState: null,
+      versions: [],
+    }
+  }
+
   return prisma.project.findUnique({
     where: { id: projectId },
     include: {

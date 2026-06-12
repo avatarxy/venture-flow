@@ -9,6 +9,10 @@ export interface ChatMessageInput {
   metadata?: Record<string, unknown> | null
 }
 
+function shouldUseDemoProject(projectId: string) {
+  return process.env.VENTUREFLOW_ENABLE_DEMO_PROJECT === "1" && projectId === "demo-project"
+}
+
 /**
  * 保存一条对话消息到数据库
  */
@@ -28,6 +32,10 @@ export async function saveChatMessage(message: ChatMessageInput) {
  * 按时间正序获取项目的完整对话历史
  */
 export async function getChatMessages(projectId: string) {
+  if (shouldUseDemoProject(projectId)) {
+    return []
+  }
+
   return prisma.chatMessage.findMany({
     where: { projectId },
     orderBy: { createdAt: "asc" },

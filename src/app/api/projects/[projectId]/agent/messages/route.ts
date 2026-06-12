@@ -44,14 +44,6 @@ export async function POST(
     await saveAgentState(initialState)
   }
 
-  // 先记录用户消息
-  await saveChatMessage({
-    projectId,
-    role: "user",
-    type: "user-text",
-    content: message.trim(),
-  })
-
   // 工具注册表 + 决策函数（使用 Mastra supervisor agent）
   const toolRegistry = createVentureFlowToolSuite()
 
@@ -84,6 +76,14 @@ export async function POST(
     },
     toolRegistry,
   )
+
+  await saveChatMessage({
+    projectId,
+    role: response.message.role,
+    type: response.message.type,
+    content: response.message.content,
+    metadata: response.message.metadata ?? null,
+  })
 
   return NextResponse.json({
     agentMessage: response.message,

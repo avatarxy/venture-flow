@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 建立 Project、Generation、GeneratedVersion、AgentState、UsageEvent 的持久化能力。
+**Goal:** 建立 Project、Generation、GeneratedVersion、AgentState、UsageEvent、ChatMessage 的持久化能力。
 
 **Architecture:** 使用 Prisma 管理 Supabase PostgreSQL Schema，并通过 repository 函数隔离数据访问。业务层不直接拼接 Prisma 查询。
 
@@ -20,6 +20,7 @@ src/server/projects/project-repository.test.ts
 src/server/versions/version-repository.ts
 src/server/events/event-repository.ts
 src/server/agent-state/agent-state-repository.ts
+src/server/messages/message-repository.ts          # 对话式新增
 ```
 
 ## Task 1: 定义 Prisma Schema
@@ -143,6 +144,20 @@ model UsageEvent {
   @@index([projectId, createdAt])
   @@index([versionId, createdAt])
   @@index([eventName, createdAt])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  projectId String
+  role      String   // "user" | "agent" | "system"
+  type      String   // "user-text" | "agent-strategy" | "agent-blueprint" | "agent-build" | "agent-review" | "agent-error" | "agent-question" | "system-info"
+  content   String   @db.Text  // Markdown 文本内容
+  metadata  Json?    // 结构化数据（完整 Strategy/Blueprint/Build JSON）
+  createdAt DateTime @default(now())
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }
 ```
 

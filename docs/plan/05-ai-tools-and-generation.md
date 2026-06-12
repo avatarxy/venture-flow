@@ -24,9 +24,12 @@ src/server/tools/generate-application.ts
 src/server/tools/inspect-build.ts
 src/server/tools/repair-application.ts
 src/server/tools/optimize-product.ts
+src/server/tools/modify-blueprint.ts           # 对话式新增：增量修改 Blueprint
+src/server/tools/regenerate-page.ts            # 对话式新增：重新生成页面
 src/server/tools/tool-suite.ts
 src/server/tools/inspect-build.test.ts
 src/server/generation/prompts/app-builder-prompt.ts
+src/server/generation/prompts/modify-blueprint-prompt.ts  # 对话式新增
 ```
 
 ## Task 1: 创建 Vercel AI SDK 调用封装
@@ -431,3 +434,196 @@ Expected: typecheck 通过，tools 测试通过。
 git add src/server/ai src/server/tools src/server/generation
 git commit -m "feat: add controlled ai tools"
 ```
+
+---
+
+## Task 7: 实现对话式增量修改工具
+
+> 以下工具为对话式交互新增。它们使 Agent 能够在用户干预下对已有的 Strategy/Blueprint/Build 进行增量修改，而不是全量重新生成。
+
+**Files:**
+- Create: `src/server/tools/modify-blueprint.ts`
+- Create: `src/server/tools/modify-blueprint.test.ts`
+- Create: `src/server/tools/regenerate-page.ts`
+- Create: `src/server/tools/regenerate-page.test.ts`
+
+**Tech Stack:** Mastra、Vercel AI SDK、Zod、TypeScript、Vitest。
+
+### Step 1: 实现 modify_blueprint 工具
+
+**目标**：基于用户自然语言指令修改已有的 Product Blueprint，保留未提及的部分。
+
+- [ ] **写 Modify Blueprint Prompt**
+
+```ts
+export function createModifyBlueprintPrompt() {
+  return `你是 VentureFlow 的 Blueprint 修改 Agent。
+你会收到一份当前 Blueprint 和一条用户修改指令。
+请只修改用户明确提到的部分，保留所有未提及的字段和结构。
+确保修改后的 Blueprint 仍然在 MVP 能力边界内：
+- 实体不超过 4 个
+- 页面不超过 5 个
+- 核心功能不超过 7 个
+- appPattern 必须是受支持的类型之一
+
+输出完整的 Product Blueprint JSON。`
+}
+```
+
+- [ ] **写 modifyBlueprint 函数**
+
+```ts
+import { createTool } from "@mastra/core/tools"
+import { z } from "zod"
+import { generateStructuredObject } from "@/server/ai/generate-structured"
+import { productBlueprintSchema } from "@/server/contracts"
+import { createModifyBlueprintPrompt } from "@/server/generation/prompts/modify-blueprint-prompt"
+import { generationSafetyConstraints } from "@/server/generation/prompts/app-builder-prompt"
+
+export const modifyBlueprintInputSchema = z.object({
+  blueprint: productBlueprintSchema,
+  instruction: z.string().min(3).describe("用户修改指令，如'再加一个 Contact 实体'"),
+})
+
+export async function modifyBlueprint(input: z.infer<typeof modifyBlueprintInputSchema>) {
+  return generateStructuredObject({
+    schema: productBlueprintSchema,
+    system: createModifyBlueprintPrompt() + "\n\n" + generationSafetyConstraints,
+    prompt: `当前 Blueprint：\n${JSON.stringify(input.blueprint, null, 2)}\n\n用户修改指令：${input.instruction}`,
+  })
+}
+
+export const modifyBlueprintTool = createTool({
+  id: "modify_blueprint",
+  description: "基于用户自然语言指令增量修改 Product Blueprint，保留未提及的部分。",
+  strict: true,
+  inputSchema: modifyBlueprintInputSchema,
+  outputSchema: productBlueprintSchema,
+  execute: async (inputData) => modifyBlueprint(inputData),
+})
+```
+
+- [ ] **写测试**
+
+```ts
+describe("modifyBlueprint", () => {
+  it("receives current blueprint and user instruction", async () => {
+    // 验证 inputSchema 包含 blueprint + instruction
+    const result = modifyBlueprintInputSchema.safeParse({
+      blueprint: validBlueprint,
+      instruction: "再加一个 Contact 实体",
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("rejects empty instruction", () => {
+    const result = modifyBlueprintInputSchema.safeParse({
+      blueprint: validBlueprint,
+      instruction: "",
+    })
+    expect(result.success).toBe(false)
+  })
+})
+```
+
+### Step 2: 实现 regenerate_page 工具
+
+**目标**：基于用户反馈重新生成应用中的某个页面，保留其他页面不变。
+
+- [ ] **写 regeneratePage 函数**
+
+```ts
+import { createTool } from "@mastra/core/tools"
+import { z } from "zod"
+import { generateStructuredObject } from "@/server/ai/generate-structured"
+import { buildOutputSchema, productBlueprintSchema } from "@/server/contracts"
+
+export const regeneratePageInputSchema = z.object({
+  blueprint: productBlueprintSchema,
+  build: z.object({
+    summary: z.string(),
+    files: z.array(z.object({ path: z.string(), content: z.string() })),
+  }),
+  targetPage: z.string().min(1).describe("目标页面名称或路由"),
+  instruction: z.string().min(3).describe("用户反馈，如'搜索功能改成实时筛选'"),
+})
+
+export async function regeneratePage(input: z.infer<typeof regeneratePageInputSchema>) {
+  return generateStructuredObject({
+    schema: buildOutputSchema,
+    system: `你是 VentureFlow 的页面修复 Agent。
+只修改用户指定的页面文件，所有其他文件保持不变。
+${generationSafetyConstraints}`,
+    prompt: JSON.stringify({
+      blueprint: input.blueprint,
+      currentBuild: input.build.summary,
+      targetPage: input.targetPage,
+      instruction: input.instruction,
+      allFiles: input.build.files.map(f => ({ path: f.path })),
+    }, null, 2),
+  })
+}
+
+export const regeneratePageTool = createTool({
+  id: "regenerate_page",
+  description: "基于用户反馈重新生成应用中的指定页面，保留其他页面不变。",
+  strict: true,
+  inputSchema: regeneratePageInputSchema,
+  outputSchema: buildOutputSchema,
+  execute: async (inputData) => regeneratePage(inputData),
+})
+```
+
+- [ ] **写测试**
+
+```ts
+describe("regeneratePage", () => {
+  it("receives blueprint, build, target page and instruction", async () => {
+    const result = regeneratePageInputSchema.safeParse({
+      blueprint: validBlueprint,
+      build: { summary: "ok", files: [{ path: "/App.tsx", content: "..." }] },
+      targetPage: "线索列表",
+      instruction: "搜索功能改成实时筛选，不要搜索按钮",
+    })
+    expect(result.success).toBe(true)
+  })
+})
+```
+
+### Step 3: 注册增量工具
+
+- [ ] **更新 Mastra tools 导出**
+
+```ts
+// 在 src/server/tools/tool-suite.ts 的 mastraTools 中新增
+export const mastraTools = {
+  // ... 现有工具 ...
+  modifyBlueprintTool,
+  regeneratePageTool,
+}
+```
+
+### Step 4: 运行验证
+
+Run: `npm run typecheck && npm run test -- src/server/tools/modify-blueprint.test.ts src/server/tools/regenerate-page.test.ts`
+
+Expected: typecheck 通过，2 个测试文件通过。
+
+---
+
+## 对话式工具清单（全部）
+
+| 工具名 | 类型 | 触发方式 | 说明 |
+|--------|------|---------|------|
+| `analyze_problem` | LLM | Agent 自主 | 分析业务问题 → Strategy |
+| `inspect_capabilities` | 本地 | Agent 自主 | 查询平台能力边界 |
+| `create_blueprint` | LLM | Agent 自主 | 生成 Product Blueprint |
+| `validate_blueprint` | 本地 | Agent 自主 | 校验 Blueprint 能力边界 |
+| `modify_blueprint` | LLM | **用户触发** | 增量修改 Blueprint（基于用户指令） |
+| `generate_application` | LLM | Agent 自主 | 生成 Sandpack React 应用 |
+| `regenerate_page` | LLM | **用户触发** | 基于用户反馈重新生成某页面 |
+| `inspect_build` | 本地 | Agent 自主 | 静态审查生成应用安全边界 |
+| `repair_application` | LLM | Agent 自主 | 自动修复审查问题 |
+| `optimize_product` | LLM | Agent 自主 | 基于 Usage Events 生成优化建议 |
+| `finish_task` | 系统 | Agent 自主/用户触发 | 完成校验并标记完成 |
+

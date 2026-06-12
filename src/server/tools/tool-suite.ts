@@ -1,12 +1,14 @@
 import { createToolRegistry } from "@/server/agent/tool-registry"
-import type { JsonValue } from "@/server/contracts/json"
+import type { AgentState, JsonValue } from "@/server/contracts"
 import { productBlueprintSchema, strategyOutputSchema, buildOutputSchema, reviewResultSchema } from "@/server/contracts"
 import { analyzeProblem, analyzeProblemTool } from "./analyze-problem"
 import { createBlueprint, createBlueprintTool } from "./create-blueprint"
 import { generateApplication, generateApplicationTool } from "./generate-application"
 import { buildInspectionInputSchema, inspectBuild, inspectBuildTool } from "./inspect-build"
 import { inspectCapabilities, inspectCapabilitiesTool } from "./inspect-capabilities"
+import { modifyBlueprint, modifyBlueprintTool } from "./modify-blueprint"
 import { optimizeProduct, optimizeProductInputSchema, optimizeProductTool } from "./optimize-product"
+import { regeneratePage, regeneratePageTool } from "./regenerate-page"
 import { repairApplication, repairApplicationTool } from "./repair-application"
 import { validateBlueprintCapability, validateBlueprintTool } from "./validate-blueprint"
 
@@ -15,7 +17,9 @@ export const mastraTools = {
   inspectCapabilitiesTool,
   createBlueprintTool,
   validateBlueprintTool,
+  modifyBlueprintTool,
   generateApplicationTool,
+  regeneratePageTool,
   inspectBuildTool,
   repairApplicationTool,
   optimizeProductTool,
@@ -133,6 +137,40 @@ export function createVentureFlowToolSuite() {
         return {
           summary: "Application repaired",
           statePatch: { build: result },
+        }
+      },
+    },
+    {
+      name: "modify_blueprint",
+      async execute(args, state) {
+        const blueprint = resolveBlueprint(args, state)
+        const instruction = String(args.instruction ?? "")
+        if (!instruction) throw new Error("缺少修改指令 instruction")
+        const result = await modifyBlueprint({ blueprint, instruction })
+        return {
+          summary: "Blueprint modified based on user instruction",
+          statePatch: { blueprint: result as AgentState["blueprint"] },
+        }
+      },
+    },
+    {
+      name: "regenerate_page",
+      async execute(args, state) {
+        const blueprint = resolveBlueprint(args, state)
+        const rawBuild = state.build ?? args.build
+        if (!rawBuild) throw new Error("无法解析 Build：state 和 args 中均未提供")
+        const targetPage = String(args.targetPage ?? "")
+        const instruction = String(args.instruction ?? "")
+        if (!targetPage || !instruction) throw new Error("缺少 targetPage 或 instruction")
+        const result = await regeneratePage({
+          blueprint,
+          build: buildOutputSchema.parse(rawBuild),
+          targetPage,
+          instruction,
+        })
+        return {
+          summary: "Page regenerated based on user feedback",
+          statePatch: { build: result as AgentState["build"] },
         }
       },
     },

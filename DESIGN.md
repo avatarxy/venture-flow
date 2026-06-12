@@ -1,6 +1,6 @@
 # Design System: VentureFlow
 
-> AI 业务解决方案生成平台
+> 对话式 AI 业务解决方案生成平台 · Chat + Preview 双栏交互
 
 ---
 

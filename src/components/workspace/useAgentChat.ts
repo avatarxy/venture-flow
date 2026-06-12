@@ -42,15 +42,21 @@ type SystemErrorMessage = {
 
 class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
   private latestAgentMessage: AgentMessagePayload | null = null
+  private latestAgentMessages: AgentMessagePayload[] = []
 
   constructor(private readonly api: string) {}
 
   clearAgentMessage() {
     this.latestAgentMessage = null
+    this.latestAgentMessages = []
   }
 
   getAgentMessage() {
     return this.latestAgentMessage
+  }
+
+  getAgentMessages() {
+    return this.latestAgentMessages
   }
 
   async sendMessages(options: Parameters<ChatTransport<WorkspaceUiMessage>["sendMessages"]>[0]) {
@@ -77,6 +83,7 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
 
     let payload: {
       agentMessage?: AgentMessagePayload
+      agentMessages?: AgentMessagePayload[]
       agentStatus?: string
       agentState?: Record<string, unknown>
       error?: string
@@ -87,25 +94,33 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
       throw new AgentTransportError("Agent 返回了无法解析的响应", "PARSE_ERROR")
     }
 
-    if (!response.ok || !payload.agentMessage) {
+    const rawMessages = payload.agentMessages?.length ? payload.agentMessages : payload.agentMessage ? [payload.agentMessage] : []
+
+    if (!response.ok || rawMessages.length === 0) {
       throw new AgentTransportError(
         payload.error ?? `Agent 响应失败 (HTTP ${response.status})`,
         "AGENT_ERROR",
       )
     }
 
-    const agentMessage: AgentMessagePayload = {
-      ...payload.agentMessage,
+    const agentMessages: AgentMessagePayload[] = rawMessages.map((message) => ({
+      ...message,
       metadata: {
-        ...(payload.agentMessage.metadata ?? {}),
-        type: payload.agentMessage.type,
+        ...(message.metadata ?? {}),
+        type: message.type,
         agentStatus: payload.agentStatus,
         agentState: payload.agentState,
       },
+    }))
+    const agentMessage = agentMessages.at(-1)
+    if (!agentMessage) {
+      throw new AgentTransportError("Agent 没有返回可展示消息", "AGENT_ERROR")
     }
-    this.latestAgentMessage = agentMessage
 
-    return createSingleMessageStream(agentMessage.content)
+    this.latestAgentMessage = agentMessage
+    this.latestAgentMessages = agentMessages
+
+    return createSingleMessageStream(agentMessages.map((message) => message.content).join("\n\n"))
   }
 
   async reconnectToStream() {
@@ -156,6 +171,15 @@ function createSystemError(id: string, message: string): SystemErrorMessage {
     parts: [{ type: "text" as const, text: `❌ ${message}` }],
     metadata: { error: true, message },
   }
+}
+
+function createWorkspaceMessage(message: AgentMessagePayload, index: number): WorkspaceUiMessage {
+  return {
+    id: `agent-${Date.now()}-${index}`,
+    role: message.role === "system" ? "system" : "assistant",
+    parts: toAiTextPart(message.content),
+    metadata: message.metadata ?? { type: message.type },
+  } as WorkspaceUiMessage
 }
 
 // ---------------------------------------------------------------------------
@@ -209,29 +233,29 @@ export function useAgentChat({
         return
       }
 
+      const agentMessages = transport.getAgentMessages()
       const agentMessage = transport.getAgentMessage()
-      if (!agentMessage) return
+      if (!agentMessage || agentMessages.length === 0) return
 
-      // Inject metadata into the assistant message
-      const metadata = agentMessage.metadata ?? { type: agentMessage.type }
+      // 将临时 streaming 出来的一条 assistant 消息替换为完整执行轨迹。
       setMessages((currentMessages) => {
         const nextMessages = [...currentMessages]
         const assistantIndex = findLastAssistantIndex(nextMessages)
         if (assistantIndex === -1) return currentMessages
-        nextMessages[assistantIndex] = {
-          ...nextMessages[assistantIndex],
-          metadata,
-        }
-        return nextMessages
+        const transcriptMessages = agentMessages.map(createWorkspaceMessage)
+        nextMessages.splice(assistantIndex, 1, ...transcriptMessages)
+        return nextMessages as WorkspaceUiMessage[]
       })
 
       // Extract preview files from build metadata
-      const files = extractPreviewFiles({
-        id: `agent-metadata-${Date.now()}`,
-        role: "assistant",
-        parts: toAiTextPart(agentMessage.content),
-        metadata,
-      })
+      const files = agentMessages.flatMap((message) =>
+        extractPreviewFiles({
+          id: `agent-metadata-${Date.now()}`,
+          role: "assistant",
+          parts: toAiTextPart(message.content),
+          metadata: message.metadata ?? { type: message.type },
+        }),
+      )
       if (files.length > 0) {
         setPreviewFiles(files)
         setActivePane("preview")

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { agentActionSchema, buildOutputSchema, productBlueprintSchema, reviewResultSchema, strategyOutputSchema } from "."
+import {
+  agentActionSchema,
+  agentStateSchema,
+  buildOutputSchema,
+  productBlueprintSchema,
+  reviewResultSchema,
+  strategyOutputSchema,
+} from "."
 
 const validBlueprint = {
   productName: "销售管理",
@@ -152,5 +159,32 @@ describe("contracts", () => {
     })
 
     expect(result.success).toBe(false)
+  })
+
+  it("restores persisted agent state with nullable stage outputs", () => {
+    const result = agentStateSchema.safeParse({
+      projectId: "project_1",
+      originalProblem: "销售团队在用 Excel 管理客户，经常漏跟线索",
+      goal: "将业务问题转化为可运行、可分析、可迭代的业务应用",
+      currentPlan: [{ title: "分析业务问题", status: "pending" }],
+      currentStep: 0,
+      strategy: null,
+      blueprint: null,
+      build: null,
+      review: null,
+      optimization: null,
+      capabilities: null,
+      toolCalls: [],
+      buildAttempts: 0,
+      repairAttempts: 0,
+      totalTokens: 0,
+      status: "planning",
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.strategy).toBeUndefined()
+      expect(result.data.capabilities).toBeUndefined()
+    }
   })
 })

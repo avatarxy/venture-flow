@@ -54,18 +54,21 @@ export const agentPlanItemSchema = z.object({
   status: z.enum(["pending", "running", "completed", "failed"]),
 })
 
+const optionalPersistedOutput = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((value) => (value === null ? undefined : value), schema.optional())
+
 export const agentStateSchema = z.object({
   projectId: z.string(),
   originalProblem: z.string(),
   goal: z.string(),
   currentPlan: z.array(agentPlanItemSchema),
   currentStep: z.number().int().nonnegative(),
-  strategy: strategyOutputSchema.optional(),
-  blueprint: productBlueprintSchema.optional(),
-  build: buildOutputSchema.optional(),
-  review: reviewResultSchema.optional(),
-  optimization: optimizationOutputSchema.optional(),
-  capabilities: inspectCapabilitiesOutputSchema.optional(),
+  strategy: optionalPersistedOutput(strategyOutputSchema),
+  blueprint: optionalPersistedOutput(productBlueprintSchema),
+  build: optionalPersistedOutput(buildOutputSchema),
+  review: optionalPersistedOutput(reviewResultSchema),
+  optimization: optionalPersistedOutput(optimizationOutputSchema),
+  capabilities: optionalPersistedOutput(inspectCapabilitiesOutputSchema),
   toolCalls: z.array(toolCallRecordSchema),
   buildAttempts: z.number().int().nonnegative(),
   repairAttempts: z.number().int().nonnegative(),

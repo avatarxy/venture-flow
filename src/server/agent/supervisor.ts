@@ -4,7 +4,7 @@ import type { ChatMessage } from "@/server/contracts/chat-message"
 import type { UserIntent } from "@/server/contracts/user-intent"
 import { parseUserIntent } from "./user-intent"
 import { canFinish, canFinishByUserAccept } from "./can-finish"
-import { MAX_AGENT_STEPS, MAX_BUILD_ATTEMPTS, MAX_REPAIR_ATTEMPTS, STEPS_THAT_CAN_WAIT_FOR_USER } from "./constants"
+import { MAX_AGENT_STEPS, MAX_BUILD_ATTEMPTS, MAX_REPAIR_ATTEMPTS } from "./constants"
 import type { AgentToolRegistry, AgentToolResult } from "./tool-registry"
 import { saveChatMessage } from "@/server/messages/message-repository"
 
@@ -220,7 +220,137 @@ export async function runSupervisorWithDecisionProvider(initialState: AgentState
 export type AgentResponse = {
   state: AgentState
   message: Pick<ChatMessage, "role" | "type" | "content"> & { metadata?: Record<string, unknown> | null }
+  messages: Array<Pick<ChatMessage, "role" | "type" | "content"> & { metadata?: Record<string, unknown> | null }>
   status: "executing" | "waiting_for_user" | "completed" | "failed"
+}
+
+type AgentVisibleMessage = AgentResponse["messages"][number]
+
+const pipelineToolNames: ToolName[] = [
+  "analyze_problem",
+  "inspect_capabilities",
+  "create_blueprint",
+  "validate_blueprint",
+  "generate_application",
+  "inspect_build",
+]
+
+function hasCompletedTool(state: AgentState, toolName: ToolName) {
+  return state.toolCalls.some((call) => call.toolName === toolName && call.status === "completed")
+}
+
+function createPipelineAction(state: AgentState): ToolAction | null {
+  if (!state.strategy) {
+    return {
+      type: "tool",
+      toolName: "analyze_problem",
+      reasoningSummary: "先把业务问题转成结构化 Strategy，明确用户、痛点、目标和成功指标。",
+      arguments: { problem: state.originalProblem },
+    }
+  }
+
+  if (!state.capabilities) {
+    return {
+      type: "tool",
+      toolName: "inspect_capabilities",
+      reasoningSummary: "确认 VentureFlow 当前能力边界，避免生成超出 MVP 范围的方案。",
+      arguments: {},
+    }
+  }
+
+  if (!state.blueprint) {
+    return {
+      type: "tool",
+      toolName: "create_blueprint",
+      reasoningSummary: "基于 Strategy 生成可落地的 Product Blueprint，作为应用生成的前置契约。",
+      arguments: { originalProblem: state.originalProblem, strategy: state.strategy },
+    }
+  }
+
+  if (!hasCompletedTool(state, "validate_blueprint")) {
+    return {
+      type: "tool",
+      toolName: "validate_blueprint",
+      reasoningSummary: "校验 Blueprint 是否落在页面、实体和核心功能的能力边界内。",
+      arguments: {
+        pagesCount: state.blueprint.pages.length,
+        entitiesCount: state.blueprint.entities.length,
+        coreFeaturesCount: state.blueprint.workflows.length,
+      },
+    }
+  }
+
+  if (!state.build) {
+    return {
+      type: "tool",
+      toolName: "generate_application",
+      reasoningSummary: "Blueprint 已就绪，开始生成可在 Sandpack 中运行的 React 应用。",
+      arguments: { blueprint: state.blueprint },
+    }
+  }
+
+  if (!state.review) {
+    return {
+      type: "tool",
+      toolName: "inspect_build",
+      reasoningSummary: "检查生成应用的入口文件、安全边界和基础功能完整性。",
+      arguments: { build: state.build },
+    }
+  }
+
+  if (!state.review.passed && state.repairAttempts < MAX_REPAIR_ATTEMPTS) {
+    return {
+      type: "tool",
+      toolName: "repair_application",
+      reasoningSummary: "Review 发现问题，使用剩余修复预算进行一次受控修复。",
+      arguments: { blueprint: state.blueprint, build: state.build, review: state.review },
+    }
+  }
+
+  return null
+}
+
+function updatePlanForTool(state: AgentState, toolName: ToolName, status: "running" | "completed" | "failed") {
+  const stepIndex = pipelineToolNames.indexOf(toolName)
+  if (stepIndex === -1) return state.currentPlan
+
+  return state.currentPlan.map((item, index) => {
+    if (index < stepIndex) return { ...item, status: "completed" as const }
+    if (index === stepIndex) return { ...item, status }
+    return item
+  })
+}
+
+function createThinkingMessage(action: ToolAction, state: AgentState): AgentVisibleMessage {
+  return {
+    role: "agent",
+    type: "agent-thinking",
+    content: `正在执行：${action.toolName}\n\n${action.reasoningSummary}`,
+    metadata: {
+      toolName: action.toolName,
+      reasoningSummary: action.reasoningSummary,
+      agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan },
+    },
+  }
+}
+
+function createResponse(input: {
+  state: AgentState
+  messages: AgentVisibleMessage[]
+  status: AgentResponse["status"]
+}): AgentResponse {
+  const message = input.messages.at(-1) ?? {
+    role: "agent" as const,
+    type: "system-info",
+    content: "Agent 没有产生新的消息。",
+  }
+
+  return {
+    state: input.state,
+    message,
+    messages: input.messages.length > 0 ? input.messages : [message],
+    status: input.status,
+  }
 }
 
 /**
@@ -251,7 +381,7 @@ export async function handleUserMessage(
   }
 
   // 否则启动/继续自主管道
-  return runAgentStep(state, stateSaver, decideFn, toolRegistry)
+  return runAgentTurn(state, stateSaver, toolRegistry)
 }
 
 /**
@@ -270,7 +400,7 @@ async function handleIntervention(
   switch (intent.type) {
     case "continue":
       state = { ...state, status: "executing", waitingForStep: undefined }
-      return runAgentStep(state, stateSaver, decideFn, toolRegistry)
+      return runAgentTurn(state, stateSaver, toolRegistry)
 
     case "modify_blueprint":
       return executeInterventionTool(state, {
@@ -302,13 +432,9 @@ async function handleIntervention(
       }, stateSaver, toolRegistry)
 
     case "skip_to_build": {
-      // 快速前进到生成应用步骤
-      const plan = state.currentPlan.map((item) => {
-        if (item.title === "生成可运行应用") return { ...item, status: "running" as const }
-        return { ...item, status: "completed" as const }
-      })
-      state = { ...state, status: "executing", currentPlan: plan, waitingForStep: undefined }
-      return runAgentStep(state, stateSaver, decideFn, toolRegistry)
+      // 用户希望加速时仍然必须补齐 Strategy/Blueprint 等前置契约。
+      state = { ...state, status: "executing", waitingForStep: undefined }
+      return runAgentTurn(state, stateSaver, toolRegistry)
     }
 
     case "accept":
@@ -317,19 +443,21 @@ async function handleIntervention(
         await stateSaver(state)
         return {
           state,
+          messages: [{ role: "agent", type: "system-info", content: "好的，项目已完成。" }],
           message: { role: "agent", type: "system-info", content: "好的，项目已完成。" },
           status: "completed",
         }
       }
-      return {
-        state,
-        message: { role: "agent", type: "agent-question", content: "应用还没有生成，需要先生成应用才能完成。要继续吗？" },
-        status: "waiting_for_user",
-      }
+      return runAgentTurn({ ...state, status: "executing", waitingForStep: undefined }, stateSaver, toolRegistry)
 
     default:
       return {
         state,
+        messages: [{
+          role: "agent",
+          type: "agent-question",
+          content: "我不太确定你的意思。你可以试试说「继续」、「修改 Blueprint」、「直接生成应用」或者「就这样吧」。",
+        }],
         message: {
           role: "agent",
           type: "agent-question",
@@ -340,104 +468,111 @@ async function handleIntervention(
   }
 }
 
-/**
- * 自主管道单步执行
- */
-async function runAgentStep(
-  state: AgentState,
+async function runAgentTurn(
+  initialState: AgentState,
   stateSaver: (state: AgentState) => Promise<void>,
-  decideFn: (state: AgentState) => Promise<unknown>,
   toolRegistry: AgentToolRegistry,
 ): Promise<AgentResponse> {
-  if (state.currentStep >= MAX_AGENT_STEPS) {
-    const isComplete = canFinish(state)
-    state = { ...state, status: isComplete ? "completed" : "failed" }
-    await stateSaver(state)
-    return {
-      state,
-      message: { role: "system", type: "system-info", content: isComplete ? "任务完成。" : "已达到最大执行步数。" },
-      status: isComplete ? "completed" : "failed",
-    }
-  }
+  let state: AgentState = { ...initialState, status: "executing", waitingForStep: undefined }
+  const messages: AgentVisibleMessage[] = []
 
-  const decisionResult = agentActionSchema.safeParse(await decideFn(state))
+  for (let step = 0; step < MAX_AGENT_STEPS; step += 1) {
+    const action = createPipelineAction(state)
 
-  if (!decisionResult.success) {
-    state = { ...state, status: "failed" }
-    await stateSaver(state)
-    return {
-      state,
-      message: { role: "agent", type: "agent-error", content: "Agent 决策解析失败。" },
-      status: "failed",
-    }
-  }
-
-  const decision = decisionResult.data
-
-  if (decision.type === "finish") {
-    if (canFinish(state)) {
-      state = { ...state, status: "completed" }
+    if (!action) {
+      const isComplete = canFinish(state)
+      state = { ...state, status: isComplete ? "completed" : "waiting_for_user" }
       await stateSaver(state)
-      return {
-        state,
-        message: { role: "agent", type: "system-info", content: "所有步骤已完成，项目已就绪。" },
-        status: "completed",
+
+      if (isComplete) {
+        messages.push({
+          role: "agent",
+          type: "system-info",
+          content: "所有步骤已完成，项目已就绪。",
+          metadata: { agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
+        })
+        return createResponse({ state, messages, status: "completed" })
       }
-    }
-    // 管道未完成，进入等待
-    state = { ...state, status: "waiting_for_user" }
-    await stateSaver(state)
-    return {
-      state,
-      message: { role: "agent", type: "agent-question", content: "已完成部分分析。要继续吗？" },
-      status: "waiting_for_user",
-    }
-  }
 
-  // 预算检查
-  const budgetError = getBudgetError(decision, state)
-  if (budgetError) {
-    state = { ...state, status: "failed" }
-    await stateSaver(state)
-    return {
-      state,
-      message: { role: "agent", type: "agent-error", content: budgetError },
-      status: "failed",
-    }
-  }
-
-  // 执行工具
-  try {
-    const tool = toolRegistry.get(decision.toolName)
-    const result = await tool.execute(decision.arguments, state)
-
-    state = {
-      ...state,
-      ...result.statePatch,
-      ...getAttemptPatch(decision, state),
-      currentStep: state.currentStep + 1,
+      messages.push({
+        role: "agent",
+        type: "agent-question",
+        content: "已完成当前可执行步骤，但完成条件还未通过。你可以继续补充需求或让我重试。",
+        metadata: { agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
+      })
+      return createResponse({ state, messages, status: "waiting_for_user" })
     }
 
-    // 生成消息卡片
-    const message = buildAgentMessage(decision.toolName, state)
-
-    // 判断是否需要暂停等待用户
-    if (STEPS_THAT_CAN_WAIT_FOR_USER.includes(decision.toolName)) {
-      state = { ...state, status: "waiting_for_user", waitingForStep: decision.toolName }
+    const budgetError = getBudgetError(action, state)
+    if (budgetError) {
+      state = { ...state, status: "failed", currentPlan: updatePlanForTool(state, action.toolName, "failed") }
       await stateSaver(state)
-      return { state, message, status: "waiting_for_user" }
+      messages.push({
+        role: "agent",
+        type: "agent-error",
+        content: budgetError,
+        metadata: { agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
+      })
+      return createResponse({ state, messages, status: "failed" })
     }
 
-    await stateSaver(state)
-    return { state, message, status: "executing" }
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : "工具执行失败"
-    return {
-      state: { ...state, status: "failed" },
-      message: { role: "agent", type: "agent-error", content: `执行 ${decision.toolName} 失败: ${errMsg}` },
-      status: "failed",
+    state = { ...state, currentPlan: updatePlanForTool(state, action.toolName, "running") }
+    messages.push(createThinkingMessage(action, state))
+
+    try {
+      const tool = toolRegistry.get(action.toolName)
+      const result = await tool.execute(action.arguments, state)
+      const record: ToolCallRecord = {
+        toolName: action.toolName,
+        reasoningSummary: action.reasoningSummary,
+        argumentsSummary: summarizeArguments(action.arguments),
+        resultSummary: result.summary,
+        status: "completed",
+        startedAt: nowIso(),
+        endedAt: nowIso(),
+        tokenUsage: 0,
+      }
+
+      const nextState = {
+        ...state,
+        ...result.statePatch,
+        ...(action.toolName === "repair_application" ? { review: undefined } : {}),
+        ...getAttemptPatch(action, state),
+        currentStep: state.currentStep + 1,
+        currentPlan: updatePlanForTool(state, action.toolName, "completed"),
+        toolCalls: [...state.toolCalls, record],
+      }
+
+      state = agentStateSchema.parse(nextState)
+      await stateSaver(state)
+      messages.push(buildAgentMessage(action.toolName, state))
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : "工具执行失败"
+      state = {
+        ...state,
+        status: "failed",
+        currentPlan: updatePlanForTool(state, action.toolName, "failed"),
+      }
+      await stateSaver(state)
+      messages.push({
+        role: "agent",
+        type: "agent-error",
+        content: `执行 ${action.toolName} 失败: ${errMsg}`,
+        metadata: { agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
+      })
+      return createResponse({ state, messages, status: "failed" })
     }
   }
+
+  state = { ...state, status: canFinish(state) ? "completed" : "failed" }
+  await stateSaver(state)
+  messages.push({
+    role: "agent",
+    type: state.status === "completed" ? "system-info" : "agent-error",
+    content: state.status === "completed" ? "任务完成。" : "已达到最大执行步数，仍未完成任务。",
+    metadata: { agentState: { currentStep: state.currentStep, currentPlan: state.currentPlan } },
+  })
+  return createResponse({ state, messages, status: state.status === "completed" ? "completed" : "failed" })
 }
 
 /**
@@ -458,12 +593,14 @@ async function executeInterventionTool(
 
     state = { ...state, status: "waiting_for_user", waitingForStep: action.toolName }
     await stateSaver(state)
-    return { state, message, status: "waiting_for_user" }
+    return { state, message, messages: [message], status: "waiting_for_user" }
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "工具执行失败"
+    const message: AgentVisibleMessage = { role: "agent", type: "agent-error", content: `执行失败: ${errMsg}` }
     return {
       state,
-      message: { role: "agent", type: "agent-error", content: `执行失败: ${errMsg}` },
+      message,
+      messages: [message],
       status: "waiting_for_user",
     }
   }

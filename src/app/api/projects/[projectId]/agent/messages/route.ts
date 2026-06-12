@@ -77,16 +77,19 @@ export async function POST(
     toolRegistry,
   )
 
-  await saveChatMessage({
-    projectId,
-    role: response.message.role,
-    type: response.message.type,
-    content: response.message.content,
-    metadata: response.message.metadata ?? null,
-  })
+  for (const message of response.messages) {
+    await saveChatMessage({
+      projectId,
+      role: message.role,
+      type: message.type,
+      content: message.content,
+      metadata: message.metadata ?? null,
+    })
+  }
 
   return NextResponse.json({
     agentMessage: response.message,
+    agentMessages: response.messages,
     agentStatus: response.status,
     agentState: {
       currentStep: response.state.currentStep,

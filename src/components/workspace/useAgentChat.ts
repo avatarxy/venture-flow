@@ -41,10 +41,17 @@ type SystemErrorMessage = {
 // ---------------------------------------------------------------------------
 
 class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
-  constructor(
-    private readonly api: string,
-    private readonly onAgentMessage: (message: AgentMessagePayload) => void,
-  ) {}
+  private latestAgentMessage: AgentMessagePayload | null = null
+
+  constructor(private readonly api: string) {}
+
+  clearAgentMessage() {
+    this.latestAgentMessage = null
+  }
+
+  getAgentMessage() {
+    return this.latestAgentMessage
+  }
 
   async sendMessages(options: Parameters<ChatTransport<WorkspaceUiMessage>["sendMessages"]>[0]) {
     const lastMessage = options.messages.at(-1)
@@ -96,7 +103,7 @@ class VentureFlowAgentTransport implements ChatTransport<WorkspaceUiMessage> {
         agentState: payload.agentState,
       },
     }
-    this.onAgentMessage(agentMessage)
+    this.latestAgentMessage = agentMessage
 
     return createSingleMessageStream(agentMessage.content)
   }
@@ -164,17 +171,9 @@ export function useAgentChat({
   const [input, setInput] = useState("")
   const [previewFiles, setPreviewFiles] = useState(initialPreviewFiles)
   const [activePane, setActivePane] = useState<"chat" | "preview">("chat")
-  const [autoStarted, setAutoStarted] = useState(false)
+  const autoStarted = useRef(false)
 
-  const latestAgentMessage = useRef<AgentMessagePayload | null>(null)
-
-  const transport = useMemo(
-    () =>
-      new VentureFlowAgentTransport(`/api/projects/${projectId}/agent/messages`, (message) => {
-        latestAgentMessage.current = message
-      }),
-    [projectId],
-  )
+  const transport = useMemo(() => new VentureFlowAgentTransport(`/api/projects/${projectId}/agent/messages`), [projectId])
 
   const { messages, sendMessage, setMessages, status, stop } = useChat<WorkspaceUiMessage>({
     id: projectId,
@@ -190,7 +189,7 @@ export function useAgentChat({
       const trimmed = content.trim()
       if (trimmed.length < 2) return
 
-      latestAgentMessage.current = null
+      transport.clearAgentMessage()
 
       try {
         await sendMessage({ text: trimmed })
@@ -210,7 +209,7 @@ export function useAgentChat({
         return
       }
 
-      const agentMessage = latestAgentMessage.current as AgentMessagePayload | null
+      const agentMessage = transport.getAgentMessage()
       if (!agentMessage) return
 
       // Inject metadata into the assistant message
@@ -238,17 +237,17 @@ export function useAgentChat({
         setActivePane("preview")
       }
     },
-    [sendMessage, setMessages],
+    [sendMessage, setMessages, transport],
   )
 
   // ---- Auto-start (fixed race condition) --------------------------------
   useEffect(() => {
-    if (autoStarted || initialMessages.length > 0 || originalProblem.trim().length < 2) {
+    if (autoStarted.current || initialMessages.length > 0 || originalProblem.trim().length < 2) {
       return
     }
-    setAutoStarted(true)
+    autoStarted.current = true
     void submitMessage(originalProblem)
-  }, [autoStarted, initialMessages.length, originalProblem, submitMessage])
+  }, [initialMessages.length, originalProblem, submitMessage])
 
   // ---- Submit handler ---------------------------------------------------
   const handleSubmit = useCallback(

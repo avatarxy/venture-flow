@@ -56,6 +56,19 @@ export async function recordUsageEvent(input: {
 }) {
   assertUsageEventAllowed(input.eventName)
   const metadata = normalizeUsageMetadata(input.metadata)
+  const version = await prisma.generatedVersion.findFirst({
+    where: {
+      id: input.versionId,
+      projectId: input.projectId,
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  if (!version) {
+    throw new Error("Usage event version does not belong to project")
+  }
 
   return prisma.usageEvent.create({
     data: {

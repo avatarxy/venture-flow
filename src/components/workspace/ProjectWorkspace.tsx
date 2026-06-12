@@ -2,8 +2,7 @@
 
 import { MessageSquare, MonitorPlay } from "lucide-react"
 import { ChatPanel } from "@/components/chat/ChatPanel"
-import { SandpackErrorBoundary } from "@/components/generated-preview/SandpackErrorBoundary"
-import { SandpackRunner } from "@/components/generated-preview/SandpackRunner"
+import { PreviewPanel } from "@/components/workspace/PreviewPanel"
 import { useAgentChat, type UseAgentChatOptions } from "./useAgentChat"
 
 type ProjectWorkspaceProps = UseAgentChatOptions & {
@@ -88,15 +87,7 @@ export function ProjectWorkspace({
         <section
           className={`${activePane === "preview" ? "block" : "hidden"} h-full min-h-0 border-l border-border bg-[rgba(252,251,248,0.36)] lg:block`}
         >
-          {previewFiles.length > 0 ? (
-            <SandpackErrorBoundary fallbackMessage="生成的应用存在渲染问题">
-              <SandpackRunner files={previewFiles} />
-            </SandpackErrorBoundary>
-          ) : (
-            <div className="flex h-full items-center justify-center px-6 text-center text-sm leading-6 text-muted-foreground">
-              Agent 生成 React 应用后，Sandpack 预览会在这里同步出现。
-            </div>
-          )}
+          <PreviewPanel files={previewFiles} />
         </section>
       </div>
     </main>

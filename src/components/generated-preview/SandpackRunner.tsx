@@ -2,35 +2,19 @@
 
 import { SandpackCodeEditor, SandpackLayout, SandpackPreview, SandpackProvider } from "@codesandbox/sandpack-react"
 import type { GeneratedFile } from "@/server/contracts"
+import { normalizeSandpackFiles } from "@/server/preview/normalize-files"
 
 type SandpackRunnerProps = {
   files: GeneratedFile[]
 }
 
-function toSandpackFiles(files: GeneratedFile[]) {
-  return files.reduce<Record<string, { code: string; active?: boolean }>>((acc, file) => {
-    acc[file.path] = {
-      code: file.content,
-      active: file.path === "/App.tsx",
-    }
-    return acc
-  }, {})
-}
-
 export function SandpackRunner({ files }: SandpackRunnerProps) {
-  const sandpackFiles = toSandpackFiles(files)
+  const sandpackFiles = normalizeSandpackFiles(files)
 
   return (
     <SandpackProvider
-      template="react-ts"
+      template="vite-react-ts"
       files={sandpackFiles}
-      customSetup={{
-        dependencies: {
-          "@vitejs/plugin-react": "latest",
-          "lucide-react": "latest",
-          recharts: "latest",
-        },
-      }}
       options={{
         autorun: true,
         recompileMode: "delayed",

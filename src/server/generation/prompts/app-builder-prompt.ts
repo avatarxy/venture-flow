@@ -17,5 +17,11 @@ export function createAppBuilderPrompt() {
 必须生成可在 Sandpack 中运行的 React 应用。
 必须输出 JSON，格式为 { "summary": string, "files": [{ "path": string, "content": string }] }。
 
+**关键格式要求**：
+- 每个文件的 content 字段必须是格式良好的多行代码，每行以换行符 \\n 分隔。
+- 禁止将整个文件内容压缩成单行（不要用分号把所有语句连成一行）。
+- JSX 元素、函数体、接口定义之间必须有换行。
+- 保持标准的 React/TypeScript 代码风格：import 语句单独一行，组件定义换行，JSX 结构缩进清晰。
+
 ${generationSafetyConstraints}`
 }

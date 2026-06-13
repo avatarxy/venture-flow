@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useAuth } from "@/components/auth/AuthContext"
+import { Footer } from "@/components/layout/Footer"
 import {
   Sparkles,
   ChevronDown,
@@ -469,6 +470,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       {children}
+
+      {/* Footer — 项目工作台和预览页不显示 */}
+      {!pathname.startsWith("/projects") && !pathname.startsWith("/preview") && <Footer />}
     </div>
   )
 }

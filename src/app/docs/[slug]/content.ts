@@ -18,7 +18,7 @@ contentMap["overview"] = {
   ],
   content: `# VentureFlow 是什么
 
-VentureFlow 是一个 **Problem-first AI 应用生成器**。你描述业务问题——比如"销售团队用 Excel 管客户，老忘记跟进"——它自动完成分析、设计、编码、上线、观察数据、迭代优化这一整条链路。
+VentureFlow 是一个 **Problem-first AI Agent 应用**。你描述业务问题——比如"销售团队用 Excel 管客户，老忘记跟进"——它自动完成分析、设计、编码、上线、观察数据、迭代优化这一整条链路。
 
 和你见过的其他 AI 代码工具有一个根本区别：它不让你先描述功能。大多数工具的做法是"你说要什么功能，我帮你写代码"。VentureFlow 的做法是"你先说遇到了什么问题，我帮你搞清楚到底需要什么，再动手"。
 
@@ -49,7 +49,7 @@ Problem-first 尝试解决的就是这个。在你还没想清楚解决方案的
 
 ## 自主管道 + 对话干预
 
-这里有一个微妙的平衡。AI 应用生成器容易走两个极端：要么完全听指令（你说啥我做啥），要么完全自主（运行时你插不上嘴）。
+这里有一个微妙的平衡。AI Agent 应用容易走两个极端：要么完全听指令（你说啥我做啥），要么完全自主（运行时你插不上嘴）。
 
 VentureFlow 走中间路线：
 
@@ -304,7 +304,7 @@ const moduleContents: Record<string, { sections: DocSection[]; content: string }
 
 ## 环境变量校验
 
-在服务端入口校验必需的环境变量（\`DATABASE_URL\`、\`DIRECT_URL\`、\`OPENAI_API_KEY\` 等），缺少时给出明确错误信息而非静默失败。使用 Zod schema 规范化环境变量读取。
+在服务端入口校验必需的环境变量（\`DATABASE_URL\`、\`DIRECT_URL\`、\`GEMINI_API_KEY\` 等），缺少时给出明确错误信息而非静默失败。使用 Zod schema 规范化环境变量读取。
 
 ## 全局布局
 

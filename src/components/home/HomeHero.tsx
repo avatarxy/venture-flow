@@ -110,7 +110,7 @@ export function HomeHero() {
         </h1>
 
         <p className="mx-auto max-w-lg text-base leading-7 text-muted-foreground md:text-lg">
-          描述你的业务痛点，AI Agent 自动完成策略分析、产品设计与应用生成，
+          描述你的业务痛点，Venture Agent 自动完成策略分析、产品设计与应用生成，
           从想法到可运行的 Web 应用，一步到位。
         </p>
       </div>

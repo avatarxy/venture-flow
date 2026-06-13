@@ -23,7 +23,7 @@
 
 ## 部署准备
 
-- [ ] `.env` 配置 `DATABASE_URL`、`OPENAI_API_KEY` 和 `NEXT_PUBLIC_APP_URL`。
+- [ ] `.env` 配置 `DATABASE_URL`、`GEMINI_API_KEY` 和 `NEXT_PUBLIC_APP_URL`。
 - [ ] Prisma migration 已应用到 Supabase PostgreSQL。
 - [ ] Vercel 项目使用 Next.js framework preset。
 - [ ] 服务端日志可以输出结构化 system events。

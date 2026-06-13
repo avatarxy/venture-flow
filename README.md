@@ -30,7 +30,10 @@ npm run dev
 
 ```bash
 DATABASE_URL=
-OPENAI_API_KEY=
+DIRECT_URL=
+GEMINI_API_KEY=
+AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+AI_MODEL=gemini-3.1-flash-lite
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
@@ -45,22 +48,11 @@ npm run test:e2e
 
 ## Demo
 
-- Demo script: [docs/demo-script.md](docs/demo-script.md)
-- Acceptance checklist: [docs/acceptance-checklist.md](docs/acceptance-checklist.md)
+- Demo: [docs/demo-script.md](docs/demo-script.md)
+- Checklist: [docs/acceptance-checklist.md](docs/acceptance-checklist.md)
 
-The main demo starts with this business problem:
+输入业务问题查看 DEMO 效果:
 
 ```text
 我们的销售团队使用 Excel 管理客户和线索，经常忘记跟进，而且负责人无法快速查看当前销售进度。
 ```
-
-## 部署与发布
-
-The app is configured for Vercel with `vercel.json`.
-
-Before deploying:
-
-1. Create a Supabase PostgreSQL database.
-2. Configure `DATABASE_URL`, `OPENAI_API_KEY`, and `NEXT_PUBLIC_APP_URL` in Vercel Environment Variables.
-3. Apply Prisma migrations.
-4. Run the verification commands above.

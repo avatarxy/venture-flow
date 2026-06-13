@@ -4,8 +4,16 @@ import { AuthProvider } from "@/components/auth/AuthContext"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "VentureFlow",
+  title: {
+    default: "VentureFlow - Problem-first AI solution builder",
+    template: "%s | VentureFlow",
+  },
   description: "Problem-first AI solution builder",
+  applicationName: "VentureFlow",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: "/icon.svg",
+  },
 }
 
 export default function RootLayout({

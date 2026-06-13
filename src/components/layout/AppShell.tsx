@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Store,
   BookOpen,
+  BookMarked,
   FileText,
   Lightbulb,
   UserPlus,
@@ -242,6 +243,12 @@ const tradingHallItems: DropdownItem[] = [
 
 const resourceItems: DropdownItem[] = [
   {
+    label: "使用手册",
+    href: "/manual",
+    icon: <BookMarked className="size-4" />,
+    desc: "产品功能介绍与操作指南",
+  },
+  {
     label: "博客",
     href: "/blog",
     icon: <BookOpen className="size-4" />,
@@ -251,13 +258,13 @@ const resourceItems: DropdownItem[] = [
     label: "文档",
     href: "/docs",
     icon: <FileText className="size-4" />,
-    desc: "平台使用指南与 API 参考",
+    desc: "技术架构与开发文档",
   },
   {
-    label: "示例",
-    href: "/examples",
+    label: "模板",
+    href: "/templates",
     icon: <Lightbulb className="size-4" />,
-    desc: "真实业务场景的生成案例",
+    desc: "浏览产品模板，一键开始创建",
   },
 ]
 

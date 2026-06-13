@@ -29,6 +29,8 @@ import {
   ArrowUpRight,
   Clock,
   User,
+  MessageSquare,
+  Home,
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -427,6 +429,14 @@ export function AppShell({ children }: { children: ReactNode }) {
               VentureFlow
             </Link>
 
+            <Link
+              href="/"
+              className="rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <Home className="mr-1.5 inline size-3.5" aria-hidden="true" />
+              首页
+            </Link>
+
             <ProjectsDropdown />
 
             <Link
@@ -464,6 +474,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </Link>
               </>
             )}
+            <Link
+              href="/feedback"
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <MessageSquare className="size-4" aria-hidden="true" />
+              反馈
+            </Link>
             {/* <NavDropdown label="配置" items={configItems} /> */}
           </nav>
         </div>

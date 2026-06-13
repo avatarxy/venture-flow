@@ -1,25 +1,21 @@
-import { Search, Star, Download, Eye, Tag, ArrowRight, Sparkles, Clock, Monitor, Image } from "lucide-react"
+import { Search, Star, Download, Eye, Tag, ArrowRight, Sparkles, Clock } from "lucide-react"
 
-/* ------------------------------------------------------------------ */
-/* 产品截图占位组件 — 品牌色渐变 + 产品名                                */
-/* ------------------------------------------------------------------ */
-
-type ThumbnailPlaceholderProps = {
+type ProductThumbnailProps = {
   title: string
-  color: string
+  imageUrl: string
 }
 
-function ThumbnailPlaceholder({ title, color }: ThumbnailPlaceholderProps) {
+function ProductThumbnail({ title, imageUrl }: ProductThumbnailProps) {
   return (
-    <div
-      className="flex aspect-[16/10] items-center justify-center rounded-lg"
-      style={{
-        background: `linear-gradient(135deg, ${color} 0%, ${color}dd 40%, ${color}88 100%)`,
-      }}
-    >
-      <div className="text-center">
-        <Monitor className="mx-auto size-8 text-white/60" aria-hidden="true" />
-        <p className="mt-2 max-w-[80%] text-xs font-medium leading-tight text-white/90">
+    <div className="relative aspect-[16/10] overflow-hidden rounded-lg bg-muted">
+      <img
+        src={imageUrl}
+        alt={`${title} 产品预览图`}
+        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+        loading="lazy"
+      />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent p-4">
+        <p className="text-xs font-medium leading-tight text-white">
           {title.split("—")[0]?.trim() ?? title}
         </p>
       </div>
@@ -46,7 +42,7 @@ const products = [
     downloads: 156,
     price: "¥299",
     period: "/ 月",
-    color: "#3b6faa",
+    imageUrl: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=900&q=80",
     description:
       "从线索导入、自动分配、跟进提醒到转化分析的全流程 CRM。集成 AI 评分引擎自动为线索打分，Kanban 视图拖拽管理销售阶段，一键生成周报。",
     features: ["AI 线索评分", "Kanban 看板", "自动跟进提醒", "销售漏斗图表", "数据导出"],
@@ -61,7 +57,7 @@ const products = [
     downloads: 89,
     price: "¥499",
     period: "/ 月",
-    color: "#2d7d46",
+    imageUrl: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=900&q=80",
     description:
       "聚合多仓库库存数据，实时展示库存水位、周转天数、低库存预警。支持手动录入和 API 对接，自动生成补货建议单。",
     features: ["多仓库聚合", "实时库存看板", "低库存预警", "补货建议", "周转率分析"],
@@ -76,7 +72,7 @@ const products = [
     downloads: 210,
     price: "¥199",
     period: "/ 月",
-    color: "#c88d2b",
+    imageUrl: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=900&q=80",
     description:
       "轻量级工单管理系统，支持邮件转工单、优先级分派、SLA 倒计时和客户自助查询。内置满意度评分和响应时间统计。",
     features: ["邮件转工单", "SLA 倒计时", "客户自助门户", "满意度评分", "响应时间报表"],
@@ -91,7 +87,7 @@ const products = [
     downloads: 72,
     price: "¥99",
     period: "/ 月",
-    color: "#7c3aed",
+    imageUrl: "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=900&q=80",
     description:
       "员工手机端提交请假/外出申请，主管一键审批，自动汇总到 HR 看板。支持年假余额计算、加班统计和月度出勤报表导出。",
     features: ["移动端申请", "一键审批", "年假余额", "加班统计", "月度报表"],
@@ -106,7 +102,7 @@ const products = [
     downloads: 48,
     price: "¥599",
     period: "/ 月",
-    color: "#1c1c1c",
+    imageUrl: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=900&q=80",
     description:
       "支持银行流水、ERP 数据、第三方支付平台三方对账。CSV 拖拽导入，智能规则匹配异常交易，一键导出对账报告。",
     features: ["三方对账", "CSV 导入", "规则匹配", "异常标记", "报告导出"],
@@ -121,7 +117,7 @@ const products = [
     downloads: 34,
     price: "免费",
     period: "",
-    color: "#c23b3b",
+    imageUrl: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=900&q=80",
     description:
       "活动报名表单 + 签到核销 + 参与数据分析。支持自定义报名字段、二维码签到、到场率统计和参与者画像分析。",
     features: ["自定义表单", "二维码签到", "到场率统计", "用户画像", "邮件通知"],
@@ -226,10 +222,10 @@ export default function ProductsPage() {
             key={product.id}
             className="group flex flex-col overflow-hidden rounded-xl border border-border bg-[rgba(252,251,248,0.45)] transition hover:border-[var(--color-border-interactive)] hover:shadow-[rgba(28,28,28,0.06)_0_12px_32px]"
           >
-            {/* 产品截图占位 */}
+            {/* 产品预览图 */}
             <a href="#">
             {/* <a href={`/marketplace/products/${product.id}`}> */}
-              <ThumbnailPlaceholder title={product.title} color={product.color} />
+              <ProductThumbnail title={product.title} imageUrl={product.imageUrl} />
             </a>
 
             <div className="flex flex-1 flex-col p-5">

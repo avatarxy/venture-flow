@@ -36,6 +36,13 @@ export default function AboutPage() {
         <p>
           如果你有业务问题想用 VentureFlow 解决，或者单纯对这个方向有兴趣，随时开始使用——不用注册也能创建项目。
         </p>
+
+        <p>
+          如果你想交流产品想法、反馈问题或讨论合作，可以通过邮箱联系我：
+          <Link className="ml-1 font-medium text-foreground underline underline-offset-4" href="mailto:imicroding@gmail.com">
+            imicroding@gmail.com
+          </Link>
+        </p>
       </article>
 
       <div className="mt-12 text-center">

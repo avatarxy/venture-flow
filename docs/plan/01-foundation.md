@@ -218,7 +218,7 @@ git commit -m "chore: add ui foundation"
 
 ```bash
 DATABASE_URL=
-OPENAI_API_KEY=
+GEMINI_API_KEY=
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
@@ -229,13 +229,13 @@ import { z } from "zod"
 
 const serverEnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  OPENAI_API_KEY: z.string().min(1),
+  GEMINI_API_KEY: z.string().min(1),
   NEXT_PUBLIC_APP_URL: z.string().url(),
 })
 
 export const env = serverEnvSchema.parse({
   DATABASE_URL: process.env.DATABASE_URL,
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
 })
 ```

@@ -1,6 +1,6 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { AlertCircle, Loader2, Send, ArrowUpRight } from "lucide-react"
 import { useTypewriterPlaceholder } from "@/components/home/useTypewriterPlaceholder"
@@ -40,11 +40,20 @@ const minProblemLength = 20
 
 export function HomeHero() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [message, setMessage] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const placeholder = useTypewriterPlaceholder()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // 从 URL query 参数读取模板预设的问题描述
+  useEffect(() => {
+    const problem = searchParams.get("problem")
+    if (problem) {
+      setMessage(decodeURIComponent(problem))
+    }
+  }, [searchParams])
 
   const canSubmit = message.trim().length >= minProblemLength && !isSubmitting
 
@@ -110,7 +119,7 @@ export function HomeHero() {
       <div className="w-full max-w-2xl">
         <form
           onSubmit={handleSubmit}
-          className="border border-border bg-[rgba(252,251,248,0.58)] p-2 shadow-[rgba(28,28,28,0.04)_0_16px_40px] [border-radius:8px]"
+          className="border border-border bg-[rgba(252,251,248,0.58)] p-2 shadow-[rgba(28,28,28,0.04)_0_16px_40px] transition focus-within:border-[var(--color-border-interactive)] focus-within:shadow-[rgba(28,28,28,0.08)_0_16px_40px] focus-within:ring-2 focus-within:ring-[var(--color-ring)] [border-radius:8px]"
         >
           <div className="flex flex-col gap-2 md:flex-row md:items-end">
             <label className="sr-only" htmlFor="business-problem">
@@ -131,8 +140,8 @@ export function HomeHero() {
                 }
               }}
               placeholder={placeholder || "描述你想解决的业务问题……"}
-              rows={3}
-              className="min-h-[88px] flex-1 resize-none bg-transparent px-3 py-3 text-base leading-6 text-foreground outline-none placeholder:text-[#8c8c88] focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] md:min-h-[80px]"
+              rows={4}
+              className="min-h-[120px] flex-1 resize-none bg-transparent px-3 py-3 text-base leading-6 text-foreground outline-none placeholder:text-[#8c8c88] md:min-h-[100px]"
               style={{
                 caretColor: "var(--color-gold)",
               }}
@@ -140,7 +149,7 @@ export function HomeHero() {
             <button
               type="submit"
               disabled={!canSubmit}
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 bg-primary px-4 text-sm text-primary-foreground shadow-[var(--shadow-button-gold-inset)] transition hover:bg-[var(--color-gold-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:cursor-not-allowed disabled:opacity-40 [border-radius:8px]"
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 bg-primary px-4 text-sm text-primary-foreground shadow-[var(--shadow-button-gold-inset)] transition hover:bg-[var(--color-gold-hover)] disabled:cursor-not-allowed disabled:opacity-40 [border-radius:8px]"
               title="创建项目"
             >
               {isSubmitting ? (

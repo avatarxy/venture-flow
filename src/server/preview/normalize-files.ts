@@ -16,10 +16,6 @@ export const sandpackGeneratedAppDependencies = {
     tailwindcss: "3.4.17",
     postcss: "8.4.49",
     autoprefixer: "10.4.20",
-    "class-variance-authority": "0.7.1",
-    clsx: "2.1.1",
-    "tailwind-merge": "2.5.5",
-    "@radix-ui/react-slot": "1.1.1",
   },
 }
 

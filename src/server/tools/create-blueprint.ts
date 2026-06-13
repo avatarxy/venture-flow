@@ -42,7 +42,7 @@ const looseBlueprintSchema = z.object({
       title: z.string().min(1),
       entityName: z.string().optional(),
     })).min(1).max(5),
-  })).min(5).max(8),
+  })).min(1).max(8),
   workflows: z.array(z.object({
     title: z.string().min(1),
     steps: z.array(z.string().min(1)).min(2),
@@ -240,11 +240,11 @@ export async function createBlueprint(input: z.infer<typeof createBlueprintInput
         `你是 VentureFlow 的 Product Blueprint Agent。请把策略转成可生成应用的完整产品蓝图，不要只生成演示级 MVP。当前用户业务问题：${input.originalProblem}
 
 完整产品边界：
-- 实体不超过 6 个，页面必须为 5-8 个页面，workflow 不超过 8 个。
-- 必须覆盖业务闭环：总览、核心对象管理、状态流转、记录/任务、分析报表或设置中的至少 5 类页面。
+- 实体不超过 6 个，页面按业务复杂度规划为 1-8 个真实页面，workflow 不超过 8 个。
+- 页面数量不追求固定模板，优先覆盖解决问题所需的最短闭环；复杂业务再扩展为多页面。
 - 页面必须是可实现的真实功能页，禁止生成“建设中”、Coming soon、占位页或只有说明文字的页面。
-- 如果业务问题是销售、客户、线索、Excel 漏跟类 CRM 场景，优先规划：Dashboard、线索列表、线索看板、客户/联系人、跟进记录、待办提醒、销售预测/报表、设置/数据导入等页面。
-- seedData 必须覆盖主要实体，便于生成应用首次打开即有可操作数据。
+- 如果业务问题是销售、客户、线索、Excel 漏跟类 CRM 场景，可以按需规划：Dashboard、线索列表、线索看板、客户/联系人、跟进记录、待办提醒、销售预测/报表、设置/数据导入等页面。
+- 如果业务涉及数据，seedData 应覆盖主要实体，便于生成应用首次打开即有可操作数据。
 
 标识符规则：
 - entities[].name 使用英文 PascalCase，例如 Lead、Customer、FollowUp。

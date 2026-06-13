@@ -27,7 +27,7 @@ describe("generateApplication", () => {
     )
   })
 
-  it("requires modular pages, Tailwind, and shadcn ui in the builder prompt", async () => {
+  it("requires Sandpack-safe Tailwind-only UI in the builder prompt", async () => {
     mockedGenerateStructuredObject.mockResolvedValueOnce({
       summary: "生成销售管理应用",
       files: [{ path: "/App.tsx", content: "export default function App() { return null }" }],
@@ -35,11 +35,6 @@ describe("generateApplication", () => {
 
     await generateApplication(validBlueprint)
 
-    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: expect.stringContaining("/pages"),
-      }),
-    )
     expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
       expect.objectContaining({
         system: expect.stringContaining("Tailwind"),
@@ -47,12 +42,22 @@ describe("generateApplication", () => {
     )
     expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: expect.stringContaining("shadcn/ui"),
+        system: expect.stringContaining("不要生成 shadcn/ui"),
+      }),
+    )
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("直接使用 Tailwind utility classes"),
+      }),
+    )
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("class-variance-authority"),
       }),
     )
   })
 
-  it("requires a complete interactive local-first product in the builder prompt", async () => {
+  it("does not force page count, seed files, storage layer, or per-page interaction in the builder prompt", async () => {
     mockedGenerateStructuredObject.mockResolvedValueOnce({
       summary: "生成销售管理应用",
       files: [{ path: "/App.tsx", content: "export default function App() { return null }" }],
@@ -60,26 +65,16 @@ describe("generateApplication", () => {
 
     await generateApplication(validBlueprint)
 
-    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: expect.stringContaining("禁止生成建设中"),
-      }),
-    )
-    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: expect.stringContaining("/lib/storage.ts"),
-      }),
-    )
-    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: expect.stringContaining("Postgres adapter"),
-      }),
-    )
-    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: expect.stringContaining("每个页面都必须可交互"),
-      }),
-    )
+    const system = mockedGenerateStructuredObject.mock.calls[0]?.[0].system ?? ""
+
+    expect(system).toContain("禁止生成建设中")
+    expect(system).toContain("按用户业务问题和 Blueprint 复杂度生成足够解决问题的功能")
+    expect(system).toContain("如果业务需求涉及数据")
+    expect(system).not.toContain("通常是 5-8 个页面")
+    expect(system).not.toContain("必须包含 /data/seed.ts")
+    expect(system).not.toContain("必须包含 /lib/storage.ts")
+    expect(system).not.toContain("每个页面都必须可交互")
+    expect(system).not.toContain("Postgres adapter")
   })
 
   it("forbids react-router-dom and asks for state based routing", async () => {
@@ -124,6 +119,11 @@ describe("generateApplication", () => {
     expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
       expect.objectContaining({
         system: expect.stringContaining("vf-generated-"),
+      }),
+    )
+    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("如果使用 localStorage"),
       }),
     )
   })

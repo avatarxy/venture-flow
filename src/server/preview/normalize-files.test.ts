@@ -28,15 +28,15 @@ describe("normalizeSandpackFiles", () => {
       tailwindcss: "3.4.17",
       postcss: "8.4.49",
       autoprefixer: "10.4.20",
-      "class-variance-authority": "0.7.1",
-      clsx: "2.1.1",
-      "tailwind-merge": "2.5.5",
-      "@radix-ui/react-slot": "1.1.1",
     })
+    expect(sandpackGeneratedAppDependencies.dependencies).not.toHaveProperty("class-variance-authority")
+    expect(sandpackGeneratedAppDependencies.dependencies).not.toHaveProperty("@radix-ui/react-slot")
+    expect(sandpackGeneratedAppDependencies.dependencies).not.toHaveProperty("clsx")
+    expect(sandpackGeneratedAppDependencies.dependencies).not.toHaveProperty("tailwind-merge")
     expect(Object.values(sandpackGeneratedAppDependencies.dependencies)).not.toContain("latest")
   })
 
-  it("adds Tailwind and shadcn-compatible runtime files for generated apps", () => {
+  it("adds Tailwind runtime files for generated apps", () => {
     const files = normalizeSandpackFiles([
       {
         path: "/App.tsx",
@@ -113,7 +113,7 @@ describe("normalizeSandpackFiles", () => {
     expect(files["/App.tsx"].code).toBe("export default function App() { return null }")
     // /package.json 由 Sandpack 模板维护，避免破坏 Nodebox 内置 Vite 依赖
     expect(files["/package.json"]).toBeUndefined()
-    // 样式入口由 runtime 维护，避免生成代码覆盖 Tailwind/shadcn 主题变量
+    // 样式入口由 runtime 维护，避免生成代码覆盖 Tailwind 主题变量
     expect(files["/src/index.css"].code).toContain("@tailwind base")
     expect(files["/tailwind.config.cjs"].code).toContain("module.exports")
   })

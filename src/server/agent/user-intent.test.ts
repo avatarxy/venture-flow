@@ -39,6 +39,20 @@ describe("parseUserIntent", () => {
     })
   })
 
+  it("routes the review fix button text to repair_application when review failed", async () => {
+    await expect(
+      parseUserIntent("请修复 Review 中发现的问题并重新生成。", {
+        hasBuild: true,
+        hasReview: true,
+        reviewPassed: false,
+      }),
+    ).resolves.toMatchObject({
+      type: "repair_application",
+      instruction: "请修复 Review 中发现的问题并重新生成。",
+      confidence: 0.95,
+    })
+  })
+
   it("routes generated app feature and copy changes to regenerate_page when a build exists", async () => {
     await expect(parseUserIntent("新增一个客户详情页面", { hasBuild: true })).resolves.toMatchObject({
       type: "regenerate_page",

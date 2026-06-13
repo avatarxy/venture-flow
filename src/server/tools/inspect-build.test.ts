@@ -11,7 +11,7 @@ function createStyledModularFiles() {
     {
       path: "/pages/DashboardPage.tsx",
       content:
-        "import { Button } from '../components/ui/button'; import { listLeads, saveLead } from '../lib/storage'; export function DashboardPage() { const leads = listLeads(); return <section className=\"grid gap-4\"><p className=\"text-sm\">{leads.length} 条线索</p><Button onClick={() => saveLead({ id: '1', name: 'Acme', status: 'new' })}>新增线索</Button></section> }",
+        "import { Button } from '../components/Button'; import { listLeads, saveLead } from '../lib/storage'; export function DashboardPage() { const leads = listLeads(); return <section className=\"grid gap-4\"><p className=\"text-sm\">{leads.length} 条线索</p><Button onClick={() => saveLead({ id: '1', name: 'Acme', status: 'new' })}>新增线索</Button></section> }",
     },
     {
       path: "/pages/LeadsPage.tsx",
@@ -34,14 +34,9 @@ function createStyledModularFiles() {
         "import { listTasks, toggleTask } from '../lib/storage'; export function TasksPage() { return <section className=\"grid gap-4\"><p className=\"text-sm\">{listTasks().length} 个待办</p><button className=\"rounded-md px-3 py-2\" onClick={() => toggleTask('t1')}>完成待办</button></section> }",
     },
     {
-      path: "/components/ui/button.tsx",
+      path: "/components/Button.tsx",
       content:
-        "import { cva } from 'class-variance-authority'; import { cn } from '../../lib/utils'; const buttonVariants = cva('inline-flex rounded-md px-3 py-2 text-sm font-medium'); export function Button(props: React.ButtonHTMLAttributes<HTMLButtonElement>) { return <button className={cn(buttonVariants())} {...props} /> }",
-    },
-    {
-      path: "/lib/utils.ts",
-      content:
-        "import { clsx, type ClassValue } from 'clsx'; import { twMerge } from 'tailwind-merge'; export function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)) }",
+        "export function Button(props: React.ButtonHTMLAttributes<HTMLButtonElement>) { return <button className=\"inline-flex rounded-md px-3 py-2 text-sm font-medium\" {...props} /> }",
     },
     {
       path: "/lib/types.ts",
@@ -100,6 +95,22 @@ describe("inspectBuild", () => {
     expect(result.issues.some((issue) => issue.type === "forbidden_dependency" && issue.message.includes("dayjs"))).toBe(true)
   })
 
+  it("rejects shadcn-specific helper dependencies", () => {
+    const result = inspectBuild({
+      summary: "bad",
+      files: [
+        {
+          path: "/App.tsx",
+          content:
+            "import { cva } from 'class-variance-authority'; export default function App() { localStorage.setItem('vf-generated-demo', '1'); return <main className={cva('p-6')()}>Demo</main> }",
+        },
+      ],
+    })
+
+    expect(result.passed).toBe(false)
+    expect(result.issues.some((issue) => issue.type === "forbidden_dependency" && issue.message.includes("class-variance-authority"))).toBe(true)
+  })
+
   it("allows whitelisted dependencies", () => {
     const result = inspectBuild({
       summary: "ok",
@@ -114,14 +125,13 @@ describe("inspectBuild", () => {
     expect(result.passed).toBe(true)
   })
 
-  it("rejects generated apps without localStorage persistence", () => {
+  it("accepts a minimal single-file Tailwind app without localStorage when data is not needed", () => {
     const result = inspectBuild({
-      summary: "bad",
-      files: [{ path: "/App.tsx", content: "export default function App() { return <button>新增</button> }" }],
+      summary: "ok",
+      files: [{ path: "/App.tsx", content: "export default function App() { return <main className=\"min-h-screen p-6\">欢迎使用</main> }" }],
     })
 
-    expect(result.passed).toBe(false)
-    expect(result.issues.some((issue) => issue.type === "persistence_missing")).toBe(true)
+    expect(result).toEqual({ passed: true, issues: [] })
   })
 
   it("rejects localStorage keys without vf-generated- prefix", () => {
@@ -193,9 +203,9 @@ describe("inspectBuild", () => {
     expect(result.passed).toBe(true)
   })
 
-  it("rejects a single-file app even when it has persistence", () => {
+  it("accepts a single-file app when it satisfies runtime and safety boundaries", () => {
     const result = inspectBuild({
-      summary: "bad",
+      summary: "ok",
       files: [
         {
           path: "/App.tsx",
@@ -205,19 +215,7 @@ describe("inspectBuild", () => {
       ],
     })
 
-    expect(result.passed).toBe(false)
-    expect(result.issues.some((issue) => issue.message.includes("/pages"))).toBe(true)
-    expect(result.issues.some((issue) => issue.message.includes("/components/ui"))).toBe(true)
-  })
-
-  it("rejects generated apps with fewer than five product pages", () => {
-    const result = inspectBuild({
-      summary: "bad",
-      files: createStyledModularFiles().filter((file) => !["/pages/CustomersPage.tsx", "/pages/FollowUpsPage.tsx", "/pages/TasksPage.tsx"].includes(file.path)),
-    })
-
-    expect(result.passed).toBe(false)
-    expect(result.issues.some((issue) => issue.message.includes("至少 5 个"))).toBe(true)
+    expect(result).toEqual({ passed: true, issues: [] })
   })
 
   it("rejects placeholder or under-construction pages", () => {
@@ -234,30 +232,13 @@ describe("inspectBuild", () => {
     expect(result.issues.some((issue) => issue.message.includes("占位"))).toBe(true)
   })
 
-  it("rejects generated apps without a reusable local-first data layer", () => {
+  it("accepts generated apps without /data/seed.ts or /lib/storage.ts when persistence is simple", () => {
     const result = inspectBuild({
-      summary: "bad",
+      summary: "ok",
       files: createStyledModularFiles().filter((file) => !["/lib/storage.ts", "/lib/types.ts", "/data/seed.ts"].includes(file.path)),
     })
 
-    expect(result.passed).toBe(false)
-    expect(result.issues.some((issue) => issue.message.includes("数据层"))).toBe(true)
-  })
-
-  it("rejects static product pages without user interaction handlers", () => {
-    const result = inspectBuild({
-      summary: "bad",
-      files: createStyledModularFiles().map((file) => ({
-        ...file,
-        content: file.content
-          .replaceAll("onClick", "data-click")
-          .replaceAll("onChange", "data-change")
-          .replaceAll("onSubmit", "data-submit"),
-      })),
-    })
-
-    expect(result.passed).toBe(false)
-    expect(result.issues.some((issue) => issue.message.includes("交互"))).toBe(true)
+    expect(result.passed).toBe(true)
   })
 
   it("rejects generated apps without Tailwind utility classes", () => {
@@ -273,7 +254,7 @@ describe("inspectBuild", () => {
     expect(result.issues.some((issue) => issue.message.includes("Tailwind"))).toBe(true)
   })
 
-  it("rejects components that call cn without importing or defining it", () => {
+  it("rejects cn/shadcn-style class merging helpers", () => {
     const result = inspectBuild({
       summary: "bad",
       files: createStyledModularFiles().map((file) =>
@@ -288,7 +269,7 @@ describe("inspectBuild", () => {
     })
 
     expect(result.passed).toBe(false)
-    expect(result.issues.some((issue) => issue.message.includes("使用 cn(...) 但没有导入或定义 cn"))).toBe(true)
+    expect(result.issues.some((issue) => issue.message.includes("直接使用 Tailwind className"))).toBe(true)
   })
 
   it("passes a styled modular generated app", () => {

@@ -20,7 +20,7 @@ describe("createVentureFlowToolSuite", () => {
             {
               path: "/pages/DashboardPage.tsx",
               content:
-                "import { Button } from '../components/ui/button'; import { listLeads, saveLead } from '../lib/storage'; export function DashboardPage() { return <section className=\"grid gap-4\"><p className=\"text-sm\">{listLeads().length} 条线索</p><Button onClick={() => saveLead({ id: '1', name: 'Acme', status: 'new' })}>新增</Button></section> }",
+                "import { Button } from '../components/Button'; import { listLeads, saveLead } from '../lib/storage'; export function DashboardPage() { return <section className=\"grid gap-4\"><p className=\"text-sm\">{listLeads().length} 条线索</p><Button onClick={() => saveLead({ id: '1', name: 'Acme', status: 'new' })}>新增</Button></section> }",
             },
             {
               path: "/pages/LeadsPage.tsx",
@@ -43,14 +43,9 @@ describe("createVentureFlowToolSuite", () => {
                 "import { listLeads } from '../lib/storage'; export function ReportsPage() { return <section className=\"grid gap-4\"><p className=\"text-sm\">预测 {listLeads().length}</p><button className=\"rounded-md px-3 py-2\" onClick={() => listLeads()}>刷新报表</button></section> }",
             },
             {
-              path: "/components/ui/button.tsx",
+              path: "/components/Button.tsx",
               content:
-                "import { cva } from 'class-variance-authority'; import { cn } from '../../lib/utils'; const buttonVariants = cva('inline-flex rounded-md px-3 py-2 text-sm font-medium'); export function Button(props: React.ButtonHTMLAttributes<HTMLButtonElement>) { return <button className={cn(buttonVariants())} {...props} /> }",
-            },
-            {
-              path: "/lib/utils.ts",
-              content:
-                "import { clsx, type ClassValue } from 'clsx'; import { twMerge } from 'tailwind-merge'; export function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)) }",
+                "export function Button(props: React.ButtonHTMLAttributes<HTMLButtonElement>) { return <button className=\"inline-flex rounded-md px-3 py-2 text-sm font-medium\" {...props} /> }",
             },
             {
               path: "/lib/types.ts",
@@ -85,6 +80,8 @@ describe("createVentureFlowToolSuite", () => {
     expect(result.statePatch.capabilities).toBeDefined()
     expect(result.statePatch.capabilities?.maxPages).toBe(8)
     expect(result.statePatch.capabilities?.allowedDependencies).toContain("react")
+    expect(result.statePatch.capabilities?.allowedDependencies).not.toContain("class-variance-authority")
+    expect(result.statePatch.capabilities?.allowedDependencies).not.toContain("@radix-ui/react-slot")
   })
 
   it("exposes validate_blueprint as runtime tool", async () => {

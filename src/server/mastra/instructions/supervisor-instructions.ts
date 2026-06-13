@@ -17,7 +17,7 @@ export const supervisorInstructions = `
 ## 工具链
 - analyze_problem: 分析业务问题 → Strategy
 - inspect_capabilities: 检查平台能力边界
-- create_blueprint: 生成完整 Product Blueprint（实体 ≤ 6，页面 5-8）
+- create_blueprint: 生成完整 Product Blueprint（实体 ≤ 6，页面 1-8，按业务复杂度取舍）
 - validate_blueprint: 校验 Blueprint 能力边界
 - modify_blueprint: 基于用户自然语言指令增量修改 Blueprint
 - generate_application: 基于 Blueprint 生成 Sandpack React 应用

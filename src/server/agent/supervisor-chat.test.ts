@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createInitialAgentState } from "./state-factory"
 import { createToolRegistry } from "./tool-registry"
-import { handleUserMessage } from "./supervisor"
+import { handleUserMessage, handleUserMessageStream } from "./supervisor"
 import { passingReview, validBlueprint, validStrategy } from "./agent-fixtures"
 import { parseUserIntent } from "./user-intent"
 
@@ -256,5 +256,33 @@ describe("handleUserMessage", () => {
     expect(response.message).toMatchObject({ type: "agent-build" })
     expect(response.state.build?.summary).toBe("changed")
     expect(response.state.waitingForStep).toBe("regenerate_page")
+  })
+
+  it("emits one done event for an unknown streamed intervention", async () => {
+    mockedParseUserIntent.mockResolvedValueOnce({
+      type: "unknown",
+      rawMessage: "看一下",
+      confidence: 0,
+    })
+    const initial = {
+      ...createInitialAgentState("project_1", "销售团队在用 Excel 管理客户，经常漏跟线索"),
+      status: "waiting_for_user" as const,
+      strategy: validStrategy,
+      blueprint: validBlueprint,
+      build: { summary: "current", files: [{ path: "/App.tsx", content: "export default function App() { return null }" }] },
+    }
+    const events: Array<{ type: string }> = []
+
+    await handleUserMessageStream(
+      "project_1",
+      "看一下",
+      async () => initial,
+      async () => undefined,
+      createFastToolRegistry(),
+      (event) => { events.push(event) },
+    )
+
+    expect(events.filter((event) => event.type === "result")).toHaveLength(1)
+    expect(events.filter((event) => event.type === "done")).toHaveLength(1)
   })
 })

@@ -45,14 +45,26 @@ model Project {
   strategy         Json?
   blueprint        Json?
   currentVersionId String?            @unique
+  userId           String?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
+  user             User?              @relation(fields: [userId], references: [id])
   generations      Generation[]
   versions         GeneratedVersion[] @relation("ProjectVersions")
   currentVersion   GeneratedVersion?  @relation("ProjectCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
   usageEvents      UsageEvent[]
   chatMessages     ChatMessage[]
   agentState       AgentState?
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  projects     Project[]
 }
 
 model Generation {

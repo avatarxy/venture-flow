@@ -2,8 +2,9 @@
 
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useState, useRef, useEffect, useCallback } from "react"
+import { useAuth } from "@/components/auth/AuthContext"
 import {
   Sparkles,
   ChevronDown,
@@ -14,6 +15,7 @@ import {
   Lightbulb,
   UserPlus,
   LogIn,
+  LogOut,
   Settings,
   Shield,
   Cpu,
@@ -25,6 +27,7 @@ import {
   Loader2,
   ArrowUpRight,
   Clock,
+  User,
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -302,6 +305,69 @@ const configItems: DropdownItem[] = [
 ]
 
 /* ------------------------------------------------------------------ */
+/* ── 用户下拉 ── */
+
+type UserInfo = { email: string; name: string }
+
+function UserDropdown({ user, onLogout }: { user: UserInfo; onLogout: () => void }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false)
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [isOpen])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition hover:bg-muted"
+      >
+        <span className="flex size-7 items-center justify-center rounded-full bg-[var(--color-gold-subtle)] text-[var(--color-gold)]">
+          <User className="size-3.5" />
+        </span>
+        <span className="hidden max-w-[100px] truncate text-muted-foreground md:inline">
+          {user.name}
+        </span>
+        <ChevronDown className={`size-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full z-50 mt-2 min-w-[180px] rounded-lg border border-border bg-[var(--color-page)] p-1.5 shadow-[var(--shadow-focus)]">
+          <div className="border-b border-border px-3 py-2">
+            <p className="text-sm font-medium">{user.name}</p>
+            <p className="text-[11px] text-muted-foreground">{user.email}</p>
+          </div>
+          <div className="mt-1 space-y-0.5">
+            <Link
+              href="/profile"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <User className="size-4" />
+              个人中心
+            </Link>
+            <button
+              type="button"
+              onClick={() => { setIsOpen(false); onLogout() }}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-[var(--color-error)] transition hover:bg-[rgba(194,59,59,0.04)]"
+            >
+              <LogOut className="size-4" />
+              退出登录
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* 主组件                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -334,9 +400,16 @@ function NavDropdown({
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, loading, logout } = useAuth()
 
   if (pathname.startsWith("/preview")) {
     return children
+  }
+
+  async function handleLogout() {
+    await logout()
+    router.push("/")
   }
 
   return (
@@ -369,21 +442,28 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           {/* 右侧：用户操作 */}
           <nav className="flex items-center gap-1">
-            <Link
-              href="/register"
-              className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-            >
-              <UserPlus className="size-4" aria-hidden="true" />
-              注册
-            </Link>
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
-            >
-              <LogIn className="size-4" aria-hidden="true" />
-              登录
-            </Link>
-            <NavDropdown label="配置" items={configItems} />
+            {loading ? (
+              <div className="size-8 animate-pulse rounded-md bg-muted" />
+            ) : user ? (
+              <UserDropdown user={user} onLogout={handleLogout} />
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                >
+                  {/* <LogIn className="size-4" aria-hidden="true" /> */}
+                  登录
+                </Link>
+                <Link
+                  href="/register"
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                >
+                  注册
+                </Link>
+              </>
+            )}
+            {/* <NavDropdown label="配置" items={configItems} /> */}
           </nav>
         </div>
       </header>

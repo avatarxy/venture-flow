@@ -31,6 +31,8 @@ import {
   User,
   MessageSquare,
   Home,
+  Menu,
+  X,
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -405,6 +407,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading, logout } = useAuth()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   if (pathname.startsWith("/preview")) {
     return children
@@ -413,78 +416,243 @@ export function AppShell({ children }: { children: ReactNode }) {
   async function handleLogout() {
     await logout()
     router.push("/")
+    setMobileMenuOpen(false)
   }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* ───── 顶部导航栏：左对齐 LOGO + 主菜单，右侧用户操作 ───── */}
+      {/* ───── 顶部导航栏 ───── */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="flex items-center justify-between px-6 py-3">
-          {/* 左侧：LOGO + 导航 */}
-          <nav className="flex items-center gap-1">
-            <Link className="flex items-center gap-2 text-sm font-semibold mr-6" href="/">
+        <div className="flex items-center justify-between px-4 py-3 md:px-6">
+          {/* 左侧：Logo + 主导航 */}
+          <div className="flex items-center gap-1">
+            <Link className="flex shrink-0 items-center gap-2 text-sm font-semibold mr-4" href="/">
               <span className="flex size-8 items-center justify-center rounded-md bg-[var(--color-ink)] text-[var(--color-ink-light)] shadow-[var(--shadow-button-inset)]">
                 <Sparkles className="size-4" aria-hidden="true" />
               </span>
-              VentureFlow
+              <span className="hidden sm:inline">VentureFlow</span>
             </Link>
 
-            <Link
-              href="/"
-              className="rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            {/* 桌面端导航 — 左对齐在 Logo 右侧 */}
+            <nav className="hidden items-center gap-1 md:flex">
+              <Link
+                href="/"
+                className="rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <Home className="mr-1.5 inline size-3.5" aria-hidden="true" />
+                首页
+              </Link>
+
+              <ProjectsDropdown />
+
+              <Link
+                href="/pricing"
+                className="rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <Tag className="mr-1.5 inline size-3.5" aria-hidden="true" />
+                定价
+              </Link>
+
+              <NavDropdown label="交易大厅" items={tradingHallItems} />
+              <NavDropdown label="资源" items={resourceItems} />
+            </nav>
+          </div>
+
+          {/* 右侧：用户操作 + 汉堡菜单 */}
+          <div className="flex items-center gap-1">
+            {/* 桌面端用户操作 */}
+            <div className="hidden items-center gap-1 md:flex">
+              {loading ? (
+                <div className="size-8 animate-pulse rounded-md bg-muted" />
+              ) : user ? (
+                <UserDropdown user={user} onLogout={handleLogout} />
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                  >
+                    登录
+                  </Link>
+                  <Link
+                    href="/register"
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                  >
+                    注册
+                  </Link>
+                </>
+              )}
+              <Link
+                href="/feedback"
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <MessageSquare className="size-4" aria-hidden="true" />
+                反馈
+              </Link>
+            </div>
+
+            {/* 移动端汉堡菜单按钮 */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="rounded-md p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground md:hidden"
+              aria-label={mobileMenuOpen ? "关闭菜单" : "打开菜单"}
             >
-              <Home className="mr-1.5 inline size-3.5" aria-hidden="true" />
-              首页
-            </Link>
-
-            <ProjectsDropdown />
-
-            <Link
-              href="/pricing"
-              className="rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-            >
-              <Tag className="mr-1.5 inline size-3.5" aria-hidden="true" />
-              定价
-            </Link>
-
-            <NavDropdown label="交易大厅" items={tradingHallItems} />
-            <NavDropdown label="资源" items={resourceItems} />
-          </nav>
-
-          {/* 右侧：用户操作 */}
-          <nav className="flex items-center gap-1">
-            {loading ? (
-              <div className="size-8 animate-pulse rounded-md bg-muted" />
-            ) : user ? (
-              <UserDropdown user={user} onLogout={handleLogout} />
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                >
-                  {/* <LogIn className="size-4" aria-hidden="true" /> */}
-                  登录
-                </Link>
-                <Link
-                  href="/register"
-                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                >
-                  注册
-                </Link>
-              </>
-            )}
-            <Link
-              href="/feedback"
-              className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
-            >
-              <MessageSquare className="size-4" aria-hidden="true" />
-              反馈
-            </Link>
-            {/* <NavDropdown label="配置" items={configItems} /> */}
-          </nav>
+              {mobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+            </button>
+          </div>
         </div>
       </header>
+
+      {/* ───── 移动端菜单抽屉 ───── */}
+      {mobileMenuOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-[rgba(28,28,28,0.2)] backdrop-blur-sm md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 z-40 w-[280px] overflow-y-auto border-l border-border bg-[var(--color-page)] p-5 pt-20 md:hidden">
+            <nav className="flex flex-col gap-1">
+              {/* Logo */}
+              <div className="mb-4 flex items-center gap-2">
+                <span className="flex size-8 items-center justify-center rounded-md bg-[var(--color-ink)] text-[var(--color-ink-light)] shadow-[var(--shadow-button-inset)]">
+                  <Sparkles className="size-4" />
+                </span>
+                <span className="text-sm font-semibold">VentureFlow</span>
+              </div>
+
+              <Link
+                href="/"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <Home className="size-4" />
+                首页
+              </Link>
+
+              <Link
+                href="/projects"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <FolderOpen className="size-4" />
+                项目
+              </Link>
+
+              <div className="my-2 border-t border-border" />
+
+              {/* 交易大厅 */}
+              <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                交易大厅
+              </span>
+              {tradingHallItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href ?? "#"}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-start gap-3 rounded-md px-3 py-2.5 text-sm transition hover:bg-muted"
+                >
+                  <span className="mt-0.5 text-muted-foreground">{item.icon}</span>
+                  <div>
+                    <p className="font-medium text-foreground">{item.label}</p>
+                    {item.desc ? (
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{item.desc}</p>
+                    ) : null}
+                  </div>
+                </Link>
+              ))}
+
+              <div className="my-2 border-t border-border" />
+
+              {/* 资源 */}
+              <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                资源
+              </span>
+              {resourceItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href ?? "#"}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-start gap-3 rounded-md px-3 py-2.5 text-sm transition hover:bg-muted"
+                >
+                  <span className="mt-0.5 text-muted-foreground">{item.icon}</span>
+                  <div>
+                    <p className="font-medium text-foreground">{item.label}</p>
+                    {item.desc ? (
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{item.desc}</p>
+                    ) : null}
+                  </div>
+                </Link>
+              ))}
+
+              <div className="my-2 border-t border-border" />
+
+              <Link
+                href="/pricing"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <Tag className="size-4" />
+                定价
+              </Link>
+
+              <Link
+                href="/feedback"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <MessageSquare className="size-4" />
+                反馈
+              </Link>
+
+              <div className="my-2 border-t border-border" />
+
+              {/* 用户 */}
+              {user ? (
+                <>
+                  <div className="px-3 py-1">
+                    <p className="text-sm font-medium">{user.name}</p>
+                    <p className="text-[11px] text-muted-foreground">{user.email}</p>
+                  </div>
+                  <Link
+                    href="/profile"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                  >
+                    <User className="size-4" />
+                    个人中心
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-[var(--color-error)] transition hover:bg-[rgba(194,59,59,0.04)]"
+                  >
+                    <LogOut className="size-4" />
+                    退出登录
+                  </button>
+                </>
+              ) : (
+                <div className="flex gap-2 px-3">
+                  <Link
+                    href="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex-1 rounded-md border border-border px-3 py-2 text-center text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                  >
+                    登录
+                  </Link>
+                  <Link
+                    href="/register"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex-1 rounded-md bg-[var(--color-ink)] px-3 py-2 text-center text-sm text-[var(--color-ink-light)] shadow-[var(--shadow-button-inset)] transition hover:opacity-90"
+                  >
+                    注册
+                  </Link>
+                </div>
+              )}
+            </nav>
+          </div>
+        </>
+      )}
 
       {children}
 

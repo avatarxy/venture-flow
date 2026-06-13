@@ -183,7 +183,7 @@ export default function ProductsPage() {
       </section>
 
       {/* 统计 */}
-      <div className="mt-8 grid grid-cols-3 gap-4 rounded-xl border border-border bg-[rgba(252,251,248,0.45)] p-4">
+      <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 rounded-xl border border-border bg-[rgba(252,251,248,0.45)] p-4">
         {marketStats.map((s) => {
           const Icon = s.icon
           return (

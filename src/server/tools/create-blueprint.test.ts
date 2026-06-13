@@ -86,7 +86,7 @@ describe("createBlueprint", () => {
     expect(blueprint.seedData.Lead?.[0]).toMatchObject({ name: "Acme", status: "跟进中" })
   })
 
-  it("instructs the model to create a complete product blueprint with five to eight pages", async () => {
+  it("instructs the model to create a right-sized product blueprint without forcing five pages", async () => {
     mockedGenerateStructuredObject.mockResolvedValueOnce({
       productName: "销售线索运营系统",
       description: "用于统一管理销售线索、客户跟进、待办提醒和销售预测的完整 CRM 产品。",
@@ -135,11 +135,11 @@ describe("createBlueprint", () => {
       strategy: validStrategy,
     })
 
-    expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: expect.stringContaining("5-8 个页面"),
-      }),
-    )
+    const system = mockedGenerateStructuredObject.mock.calls[0]?.[0].system ?? ""
+
+    expect(system).toContain("页面按业务复杂度规划为 1-8 个真实页面")
+    expect(system).toContain("页面数量不追求固定模板")
+    expect(system).not.toContain("5-8 个页面")
     expect(mockedGenerateStructuredObject).toHaveBeenCalledWith(
       expect.objectContaining({
         system: expect.stringContaining("禁止生成“建设中”"),
@@ -150,5 +150,46 @@ describe("createBlueprint", () => {
         system: expect.stringContaining("销售团队在用 Excel 管理客户，经常漏跟线索"),
       }),
     )
+  })
+
+  it("accepts a right-sized generated blueprint with fewer than five pages", async () => {
+    const generatedBlueprint = {
+      productName: "线索跟进助手",
+      description: "用于统一记录销售线索、提醒下一次跟进并减少漏跟的轻量 CRM 产品。",
+      problemSummary: "销售团队使用 Excel 管理客户，导致线索跟进不及时。",
+      targetUsers: ["销售代表", "销售经理"],
+      goals: ["减少漏跟", "提升线索跟进效率"],
+      successMetrics: ["按时跟进率", "逾期线索数量"],
+      appPattern: "crm",
+      entities: [
+        {
+          name: "Lead",
+          label: "线索",
+          fields: [
+            { name: "name", label: "名称", type: "string", required: true },
+            { name: "status", label: "状态", type: "status", required: true, options: ["新建", "跟进中", "已成交"] },
+          ],
+        },
+      ],
+      pages: [
+        { id: "dashboard", name: "仪表盘", route: "/", purpose: "展示线索跟进风险和关键指标", components: [{ type: "dashboard", title: "跟进概览", entityName: "Lead" }] },
+        { id: "leads", name: "线索", route: "/leads", purpose: "管理线索列表、状态和下一次跟进", components: [{ type: "table", title: "线索列表", entityName: "Lead" }] },
+      ],
+      workflows: [{ title: "跟进线索", steps: ["新增线索", "更新跟进状态"] }],
+      decisions: [{ title: "轻量线索管理", decision: "生成两页 CRM 产品", reason: "两页即可覆盖概览和线索管理闭环", tradeoff: "暂不拆分复杂报表" }],
+      seedData: {
+        Lead: [{ name: "Acme", status: "跟进中" }],
+      },
+    }
+    mockedGenerateStructuredObject.mockResolvedValueOnce(generatedBlueprint)
+
+    const blueprint = await createBlueprint({
+      originalProblem: "销售团队在用 Excel 管理客户，经常漏跟线索",
+      strategy: validStrategy,
+    })
+
+    const schema = mockedGenerateStructuredObject.mock.calls[0]?.[0].schema
+    expect(schema.safeParse(generatedBlueprint).success).toBe(true)
+    expect(blueprint.pages).toHaveLength(2)
   })
 })

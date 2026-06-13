@@ -31,11 +31,7 @@ const forbiddenRuntimeApis = [
 
 // localStorage key 前缀要求
 const localStorageKeyPrefix = "vf-generated-"
-const tsxFileExtensions = /\.(tsx|jsx)$/
-const minimumProductPages = 5
-const requiredDataLayerFiles = ["/lib/storage.ts", "/lib/types.ts", "/data/seed.ts"]
 const placeholderPattern = /\b(coming soon|under construction|placeholder|todo)\b|建设中|施工中|占位|待开发/i
-const interactionHandlerPattern = /\bon(?:Click|Submit|Change|Input|DragEnd|Drop|KeyDown)\s*=/
 const cnCallPattern = /\bcn\s*\(/
 const cnImportPattern = /\bimport\s*\{[^}]*\bcn\b[^}]*\}\s*from\s*['"][^'"]+['"]/
 const cnDeclarationPattern = /\b(?:function|const|let|var)\s+cn\b|\bexport\s+function\s+cn\b/
@@ -142,10 +138,6 @@ export function inspectBuild(build: z.infer<typeof buildInspectionInputSchema> |
   const issues: ReviewResult["issues"] = []
   const appFile = parsedBuild.files.find((file) => file.path === "/App.tsx")
   const allContent = parsedBuild.files.map((file) => file.content).join("\n")
-  const appFiles = parsedBuild.files.filter((file) => tsxFileExtensions.test(file.path))
-  const pageFiles = parsedBuild.files.filter((file) => /^\/pages\/.+\.(tsx|jsx)$/.test(file.path))
-  const uiComponentFiles = parsedBuild.files.filter((file) => /^\/components\/ui\/.+\.(tsx|jsx)$/.test(file.path))
-  const filePaths = new Set(parsedBuild.files.map((file) => file.path))
 
   for (const file of parsedBuild.files) {
     if (hasDisallowedControlCharacters(file.content)) {
@@ -170,8 +162,8 @@ export function inspectBuild(build: z.infer<typeof buildInspectionInputSchema> |
       }
     }
 
-    if (cnCallPattern.test(strippedContent) && !cnImportPattern.test(strippedContent) && !cnDeclarationPattern.test(strippedContent)) {
-      issues.push({ type: "missing_feature", message: `${file.path} 使用 cn(...) 但没有导入或定义 cn，会导致 Sandpack 编译失败`, severity: "high" })
+    if (cnCallPattern.test(strippedContent) || cnImportPattern.test(strippedContent) || cnDeclarationPattern.test(strippedContent)) {
+      issues.push({ type: "missing_feature", message: `${file.path} 使用了 cn/shadcn 风格 class 合并工具；生成应用应直接使用 Tailwind className`, severity: "high" })
     }
   }
 
@@ -183,44 +175,11 @@ export function inspectBuild(build: z.infer<typeof buildInspectionInputSchema> |
     }
   }
 
-  if (pageFiles.length === 0) {
-    issues.push({ type: "missing_feature", message: "生成应用必须将业务页面拆分到 /pages/*.tsx，不能只写在 /App.tsx", severity: "high" })
-  }
-
-  if (pageFiles.length > 0 && pageFiles.length < minimumProductPages) {
-    issues.push({ type: "missing_feature", message: `生成应用必须包含至少 ${minimumProductPages} 个可用产品页面，不能只生成轻量 demo`, severity: "high" })
-  }
-
-  if (uiComponentFiles.length === 0) {
-    issues.push({ type: "missing_feature", message: "生成应用必须包含 /components/ui/*.tsx shadcn/ui 风格基础组件", severity: "high" })
-  }
-
-  for (const requiredFile of requiredDataLayerFiles) {
-    if (!filePaths.has(requiredFile)) {
-      issues.push({ type: "missing_feature", message: `生成应用必须包含 local-first 数据层文件 ${requiredFile}`, severity: "high" })
-    }
-  }
-
-  const storageFile = parsedBuild.files.find((file) => file.path === "/lib/storage.ts")
-  if (storageFile && !/\b(list|read|get)[A-Z_a-z0-9]*\s*\(/.test(storageFile.content)) {
-    issues.push({ type: "missing_feature", message: "/lib/storage.ts 必须提供读取数据的 repository 函数", severity: "high" })
-  }
-  if (storageFile && !/\b(create|add|save|update|delete|remove|toggle)[A-Z_a-z0-9]*\s*\(/.test(storageFile.content)) {
-    issues.push({ type: "missing_feature", message: "/lib/storage.ts 必须提供新增、修改、删除或状态流转函数", severity: "high" })
-  }
-
   if (!/\bclassName\s*=/.test(allContent)) {
     issues.push({ type: "missing_feature", message: "生成应用必须使用 Tailwind utility className 构建布局和样式", severity: "high" })
   }
 
-  const interactivePageCount = pageFiles.filter((file) => interactionHandlerPattern.test(file.content)).length
-  if (pageFiles.length > 0 && interactivePageCount < pageFiles.length) {
-    issues.push({ type: "missing_feature", message: "每个产品页面都必须包含真实交互处理器，不能生成只读静态页面", severity: "high" })
-  }
-
-  if (!allContent.includes("localStorage")) {
-    issues.push({ type: "persistence_missing", message: "生成应用必须使用 localStorage 持久化业务数据", severity: "high" })
-  } else {
+  if (allContent.includes("localStorage")) {
     for (const file of parsedBuild.files) {
       const invalidKeys = findInvalidLocalStorageKeys(file.content)
       for (const key of invalidKeys) {
@@ -229,15 +188,11 @@ export function inspectBuild(build: z.infer<typeof buildInspectionInputSchema> |
     }
   }
 
-  if (appFiles.length < 3) {
-    issues.push({ type: "missing_feature", message: "生成应用必须组件化，至少包含 /App.tsx、一个 /pages 页面和一个 UI/业务组件文件", severity: "medium" })
-  }
-
   return {
     passed: issues.length === 0,
     issues,
     recommendedFix: issues.length
-      ? "移除禁止依赖，补齐 /App.tsx、至少 5 个 /pages 页面、/components/ui 组件、/lib/storage.ts 数据层和真实交互，使用 Tailwind className，并确保 localStorage key 以 vf-generated- 开头"
+      ? "补齐 /App.tsx 默认导出，移除禁止依赖和危险 API，使用 Tailwind className；如果使用 localStorage，key 必须以 vf-generated- 开头"
       : undefined,
   }
 }

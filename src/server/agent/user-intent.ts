@@ -23,7 +23,12 @@ type IntentContext = {
   status?: unknown
   hasBlueprint?: unknown
   hasBuild?: unknown
+  hasReview?: unknown
+  reviewPassed?: unknown
+  reviewFailed?: unknown
+  reviewIssuesSummary?: unknown
   currentStep?: unknown
+  waitingForStep?: unknown
 }
 
 function hasGeneratedBuild(context: IntentContext) {
@@ -34,6 +39,13 @@ function looksLikeApplicationError(text: string) {
   return (
     /(console error|error type|error message|something went wrong|unknown character|runtime error|build error|compile error|syntaxerror|typeerror|referenceerror)/i.test(text) ||
     /(报错|异常|白屏|无法预览|不能预览|预览失败|编译失败|运行失败|控制台)/.test(text)
+  )
+}
+
+function looksLikeReviewFixRequest(text: string) {
+  return (
+    /(修复|解决|处理|重试|重新生成|重新生成应用|fix|repair).*(review|审查|问题|issue)/i.test(text) ||
+    /(review|审查|问题|issue).*(修复|解决|处理|重试|重新生成|fix|repair)/i.test(text)
   )
 }
 
@@ -85,6 +97,10 @@ function parseDeterministicIntent(userMessage: string, context: IntentContext = 
   }
 
   if (hasGeneratedBuild(context) && looksLikeApplicationError(userMessage)) {
+    return { type: "repair_application", instruction: userMessage.trim(), confidence: 0.95 }
+  }
+
+  if (hasGeneratedBuild(context) && looksLikeReviewFixRequest(userMessage)) {
     return { type: "repair_application", instruction: userMessage.trim(), confidence: 0.95 }
   }
 
@@ -149,6 +165,7 @@ export async function parseUserIntent(
 如果 context.hasBuild=true：
 - 用户要求新增功能、页面、Tab、字段，或修改页面、按钮、文案、样式，应优先判为 regenerate_page，而不是 modify_blueprint。
 - 用户粘贴错误堆栈、Console Error、Something went wrong、Unknown character 等，应判为 repair_application。
+- 用户要求修复 Review/审查中发现的问题、issue 或点击修复问题按钮形成的固定文案，应判为 repair_application。
 
 每条意图都附带 confidence (0-1)，表示识别的确信度。`,
       prompt: JSON.stringify({ userMessage, context: _context }, null, 2),

@@ -70,6 +70,11 @@ function createUserReportedReview(instruction: string) {
 }
 
 function createIntentContext(state: AgentState) {
+  const reviewIssuesSummary = state.review?.issues
+    ?.slice(0, 6)
+    .map((issue) => issue.message)
+    .join("\n")
+
   return {
     status: state.status,
     currentStep: state.currentStep,
@@ -78,6 +83,9 @@ function createIntentContext(state: AgentState) {
     hasBlueprint: Boolean(state.blueprint),
     hasBuild: Boolean(state.build),
     hasReview: Boolean(state.review),
+    reviewPassed: state.review?.passed,
+    reviewFailed: state.review?.passed === false,
+    reviewIssuesSummary,
   }
 }
 

@@ -55,7 +55,7 @@ export const productBlueprintSchema = z
     successMetrics: z.array(z.string().min(1)).min(1),
     appPattern: appPatternSchema,
     entities: z.array(entitySchema).min(1).max(6),
-    pages: z.array(pageSchema).min(5).max(8),
+    pages: z.array(pageSchema).min(1).max(8),
     workflows: z.array(workflowSchema).min(1).max(8),
     decisions: z.array(productDecisionSchema).min(1).max(10),
     seedData: z.record(z.string(), z.array(z.record(z.string(), jsonValueSchema))),
